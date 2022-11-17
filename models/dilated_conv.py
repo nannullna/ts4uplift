@@ -43,9 +43,9 @@ class ConvBlock(nn.Module):
 
 
 class DilatedConvEncoder(nn.Module):
-    def __init__(self, in_channels, channels, kernel_size, dropout_p: float = 0.0):
+    def __init__(self, in_channels: int, channels: List[int], kernel_size: int=3, dropout_p: float = 0.0):
         super().__init__()
-        self.net = nn.Sequential(
+        self.net = nn.Sequential(*[
             ConvBlock(
                 channels[i-1] if i > 0 else in_channels,
                 channels[i],
@@ -55,7 +55,7 @@ class DilatedConvEncoder(nn.Module):
                 dropout_p = dropout_p,
             )
             for i in range(len(channels))
-        )
+        ])
         
     def forward(self, x):
         return self.net(x)

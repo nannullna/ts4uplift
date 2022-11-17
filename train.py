@@ -42,11 +42,11 @@ NUM_METHODS = 5
 
 def create_encoder(config):
     if config.backbone_type == "tcn":
-        encoder = TCNEncoder([NUM_ACTIONS, NUM_METHODS], [config.embedding_dim, 2], config.feature_dim, num_layers=10, dropout_p=config.dropout, pool=config.pool_type)
+        encoder = TCNEncoder([NUM_ACTIONS, NUM_METHODS], [config.embedding_dim, 2], config.feature_dim, num_layers=config.num_layers, max_length=config.max_length, dropout_p=config.dropout, pool=config.pool_type)
     elif config.backbone_type == "lstm":
-        encoder = RNNEncoder([NUM_ACTIONS, NUM_METHODS], [config.embedding_dim, 2], config.feature_dim, num_layers=2, dropout_p=config.dropout, rnn_type="lstm")
+        encoder = RNNEncoder([NUM_ACTIONS, NUM_METHODS], [config.embedding_dim, 2], config.feature_dim, num_layers=config.num_layers, max_length=config.max_length, dropout_p=config.dropout, rnn_type="lstm")
     elif config.backbone_type == "gru":
-        encoder = RNNEncoder([NUM_ACTIONS, NUM_METHODS], [config.embedding_dim, 2], config.feature_dim, num_layers=2, dropout_p=config.dropout, rnn_type="lstm")
+        encoder = RNNEncoder([NUM_ACTIONS, NUM_METHODS], [config.embedding_dim, 2], config.feature_dim, num_layers=config.num_layers, max_length=config.max_length, dropout_p=config.dropout, rnn_type="lstm")
     else:
         raise ValueError(f"Unknown backbone type: {config.backbone_type}")
     return encoder

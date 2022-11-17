@@ -172,7 +172,7 @@ def calc_metrics(targets: Dict[str, Any], preds: Dict[str, Any]) -> Dict[str, fl
 
 def save_model(config, model: nn.Module, optimizer: optim.Optimizer, epoch: int, metrics: Dict[str, float], save_dir: str):
     model_path = os.path.join(save_dir, f"model_{epoch}.pth")
-    torch.save({"state_dict": model.state_dict(), "optimizer": optimizer.state_dict(), "epoch": epoch, "metrics": metrics, "config": config}, model_path)
+    torch.save({"state_dict": model.state_dict(), "optimizer": optimizer.state_dict(), "epoch": epoch, "metrics": metrics, "config": dict(config)}, model_path)
 
 
 def direct_uplift_loss(out: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor], alpha: float=0.5, e_x: float=0.5, return_all: bool=False) -> torch.Tensor:
@@ -242,6 +242,8 @@ def main(config):
     # Load model and optimizer
     model = create_model(config)
     model.to(device)
+    if not config.disable_wandb:
+        wandb.watch(model, log="all", log_freq=100)
     optimizer = create_optimizer(config, model)
 
     for epoch in range(1, config.epochs+1):

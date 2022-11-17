@@ -1,5 +1,6 @@
 # Dataset, Logs
 wandb/
+saved/
 *.zip
 *.csv
 

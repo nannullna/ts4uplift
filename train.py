@@ -101,7 +101,8 @@ def train(config, model: nn.Module, train_loader: DataLoader, device: torch.devi
     bce_losses /= len(train_loader)
 
     print(f"Train Epoch: {epoch} \tLoss: {train_loss:.6f}")
-    wandb.log({"train/loss": train_loss, "train/mse_loss": mse_losses, "train/bce_loss": bce_loss, "epoch": epoch})
+    metrics = {"train/loss": train_loss, "train/mse_loss": mse_losses, "train/bce_loss": bce_loss, "epoch": epoch}
+    return metrics
 
 
 def valid(config, model: nn.Module, valid_loader: DataLoader, device: torch.device, epoch: int, calc_metrics: Callable[[Dict[str, torch.Tensor], Dict[str, torch.Tensor]], Dict[str, float]], prefix: str='valid') -> Dict[str, float]:
@@ -139,7 +140,7 @@ def valid(config, model: nn.Module, valid_loader: DataLoader, device: torch.devi
             bce_losses += bce_loss.item()
 
     all_batches = {k: torch.cat(v, dim=0) for k, v in all_batches.items()}
-    all_preds = {k: torch.cat(v, dim=0) for k, v in all_preds.items()}
+    all_preds = {k: torch.cat(v, dim=0) for k, v in all_preds.items() if len(v) > 0}
     
     valid_loss /= len(valid_loader)
     mse_losses /= len(valid_loader)
@@ -166,6 +167,11 @@ def calc_metrics(targets: Dict[str, Any], preds: Dict[str, Any]) -> Dict[str, fl
         metrics["treatment_auc"] = roc_auc_score(targets["t"], preds["t"])
 
     return metrics
+
+
+def save_model(config, model: nn.Module, optimizer: optim.Optimizer, epoch: int, metrics: Dict[str, float], save_dir: str):
+    model_path = os.path.join(save_dir, f"model_{epoch}.pth")
+    torch.save({"state_dict": model.state_dict(), "optimizer": optimizer.state_dict(), "epoch": epoch, "metrics": metrics, "config": config}, model_path)
 
 
 def direct_uplift_loss(out: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor], alpha: float=0.5, e_x: float=0.5, return_all: bool=False) -> torch.Tensor:
@@ -226,9 +232,11 @@ def main(config):
         test_set = UpliftDataset(config.test_path)
         test_loader = DataLoader(test_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
             collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
+        print(f"Train size: {len(train_set)}, valid size: {len(valid_set)}, test size: {len(test_set)}")
     else:
         test_set = None
         test_loader = None
+        print(f"Train size: {len(train_set)}, valid size: {len(valid_set)}, no test set")
 
     # Load model and optimizer
     model = create_model(config)
@@ -236,10 +244,28 @@ def main(config):
     optimizer = create_optimizer(config, model)
 
     for epoch in range(1, config.epochs+1):
-        train(config, model, train_loader, device, optimizer, epoch)
-        valid(config, model, valid_loader, device, epoch, calc_metrics=calc_metrics, prefix='valid')
-        if test_loader is not None:
-            valid(config, model, test_loader, device, epoch, calc_metrics=calc_metrics, prefix='test')
+
+        all_metrics = {}
+
+        train_metrics = train(config, model, train_loader, device, optimizer, epoch)
+        all_metrics.update(train_metrics)
+        if not config.disable_wandb:
+            wandb.log(train_metrics)
+        
+        if config.eval_every % epoch == 0:
+            valid_metrics = valid(config, model, valid_loader, device, epoch, calc_metrics=calc_metrics, prefix='valid')    
+            all_metrics.update(valid_metrics)
+            if not config.disable_wandb:
+                wandb.log(valid_metrics)
+        
+            if test_loader is not None:
+                test_metrics = valid(config, model, test_loader, device, epoch, calc_metrics=calc_metrics, prefix='test')
+                if not config.disable_wandb:
+                    wandb.log(test_metrics)
+                all_metrics.update(test_metrics)
+
+        if epoch % config.save_every == 0:
+            save_model(config, model, optimizer, epoch, all_metrics, config.save_dir)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ import argparse
 def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Add training arguments to the parser"""
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--save_dir", type=str, default='saved/')
     parser.add_argument("--disable_wandb", action='store_true')
     parser.add_argument("--disable_tqdm", action='store_true')
 
@@ -15,7 +16,7 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
 
     parser.add_argument("--log_every", type=int, default=1)
     parser.add_argument("--save_every", type=int, default=10)
-    parser.add_argument("--eval_every", type=int, default=10)
+    parser.add_argument("--eval_every", type=int, default=1)
 
     parser.add_argument("--alpha", type=float, default=0.2)
 

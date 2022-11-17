@@ -24,7 +24,7 @@ class SiameseNetwork(nn.Module):
         z1 = torch.cat([z, t1], dim=1)
         z0 = torch.cat([z, t0], dim=1)
 
-        y1 = self.predictor_y(z1).squeeze(1)
-        y0 = self.predictor_y(z0).squeeze(0)
+        y1 = torch.sigmoid(self.predictor_y(z1).squeeze(1))
+        y0 = torch.sigmoid(self.predictor_y(z0).squeeze(1))
 
         return {'y1': y1, 'y0': y0}

@@ -255,7 +255,7 @@ def main(config):
         if not config.disable_wandb:
             wandb.log(train_metrics)
         
-        if config.eval_every % epoch == 0:
+        if epoch % config.eval_every == 0:
             valid_metrics = valid(config, model, valid_loader, device, epoch, calc_metrics=calc_metrics, prefix='valid')    
             all_metrics.update(valid_metrics)
             if not config.disable_wandb:

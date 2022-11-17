@@ -26,7 +26,7 @@ from torch.utils.data import Dataset, DataLoader, Subset
 import wandb
 from tqdm import tqdm
 
-from args import add_training_args, add_model_args
+from args import add_training_args, add_model_args, add_dataset_args
 from dataset.dataset import UpliftDataset, collate_fn
 from models.siamese import SiameseNetwork
 from models.dragonnet import Dragonnet
@@ -63,13 +63,13 @@ def create_model(config):
 
 def create_optimizer(config, model: nn.Module):
     if config.optimizer_type == "adam":
-        optimizer = optim.Adam(model.parameters(), lr=config.learning_rate, betas=[config.momentum, 0.999], weight_decay=config.weight_decay)
-    elif config.optimizer_type == "adam":
-        optimizer = optim.Adam(model.parameters(), lr=config.learning_rate, betas=[config.momentum, 0.999], weight_decay=config.weight_decay)
+        optimizer = optim.Adam(model.parameters(), lr=config.lr, betas=[config.momentum, 0.999], weight_decay=config.weight_decay)
+    elif config.optimizer_type == "adamw":
+        optimizer = optim.AdamW(model.parameters(), lr=config.lr, betas=[config.momentum, 0.999], weight_decay=config.weight_decay)
     elif config.optimizer_type == "sgd":
-        optimizer = optim.SGD(model.parameters(), lr=config.learning_rate, momentum=config.momentum, weight_decay=config.weight_decay)
+        optimizer = optim.SGD(model.parameters(), lr=config.lr, momentum=config.momentum, weight_decay=config.weight_decay)
     else:
-        raise ValueError(f"Unknown optimizer: {config.optimizer}")
+        raise ValueError(f"Unknown optimizer: {config.optimizer_type}")
     return optimizer
 
 
@@ -92,6 +92,8 @@ def train(config, model: nn.Module, train_loader: DataLoader, device: torch.devi
         loss.backward()
         optimizer.step()
         train_loss += loss.item()
+
+        # print(f"Epoch: {epoch} | Batch: {batch_idx} | Loss: {loss.item()}")
             
     train_loss /= len(train_loader)
     print(f"Train Epoch: {epoch} \tLoss: {train_loss:.6f}")
@@ -113,7 +115,7 @@ def direct_uplift_loss(out: Dict[str, torch.Tensor], batch: Dict[str, torch.Tens
     y_pred = torch.where(t == 1, y1, y0)
 
     loss_uplift = F.mse_loss((y1 - y0), z)
-    loss_pred = F.binary_cross_entropy_with_logits(y_pred, y)
+    loss_pred = F.binary_cross_entropy(y_pred, y)
 
     total_loss = (1-alpha) * loss_uplift + alpha * loss_pred
     return total_loss
@@ -146,7 +148,7 @@ def main(config):
     # Load data
     raw_datasets = UpliftDataset(config.dataset_path)
 
-    train_set, valid_set = raw_datasets.val_by_user(config.val_ratio, config.dataset_seed)
+    train_set, valid_set = raw_datasets.split_valid(by='user', val_ratio=config.val_ratio, random_state=config.dataset_seed)
     train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, drop_last=True,
         collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
     valid_loader = DataLoader(valid_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
@@ -158,12 +160,13 @@ def main(config):
     optimizer = create_optimizer(config, model)
 
     for epoch in range(1, config.epochs+1):
-        train(config, model, device, train_loader, optimizer, epoch)
-        valid(config, model, device, valid_loader, epoch)
+        train(config, model, train_loader, device, optimizer, epoch)
+        valid(config, model, valid_loader, device, epoch)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Uplift Modeling")
+    parser = add_dataset_args(parser)
     parser = add_training_args(parser)
     parser = add_model_args(parser)
     args = parser.parse_args()

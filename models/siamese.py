@@ -18,13 +18,13 @@ class SiameseNetwork(nn.Module):
     def forward(self, inputs):
         z = self.backbone(inputs)
 
-        B, L, D = z.size()
-        t1 = torch.ones(B, L, 1, device=z.device)
-        t0 = torch.zeros(B, L, 1, device=z.device)
-        z1 = torch.cat([z, t1], dim=2)
-        z0 = torch.cat([z, t0], dim=2)
+        B, D = z.size()
+        t1 = torch.ones(B, 1, device=z.device)
+        t0 = torch.zeros(B, 1, device=z.device)
+        z1 = torch.cat([z, t1], dim=1)
+        z0 = torch.cat([z, t0], dim=1)
 
-        y1 = self.predictor_y(z1)
-        y0 = self.predictor_y(z0)
+        y1 = self.predictor_y(z1).squeeze(1)
+        y0 = self.predictor_y(z0).squeeze(0)
 
         return {'y1': y1, 'y0': y0}

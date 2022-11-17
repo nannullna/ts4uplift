@@ -2,6 +2,7 @@ from typing import Dict, List, Tuple, Callable, Any
 import os
 import argparse
 from dataclasses import dataclass
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -274,6 +275,10 @@ if __name__ == "__main__":
     parser = add_training_args(parser)
     parser = add_model_args(parser)
     args = parser.parse_args()
+
+    if args.save_dir is not None:
+        args.save_dir = os.path.join(args.save_dir, f"{args.model_type}_{args.backbone_type}_{datetime.now().strftime('%Y%m%d-%H%M%S')}")
+        os.makedirs(args.save_dir, exist_ok=True)
 
     if not args.disable_wandb:
         wandb.init(project="aaai23", config=args)

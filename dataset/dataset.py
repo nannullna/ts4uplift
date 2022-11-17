@@ -6,12 +6,17 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, Subset
+from torch.nn.utils.rnn import (
+    pad_sequence,
+    pack_padded_sequence, # Packs a Tensor containing padded sequences of variable length
+    pad_packed_sequence,  # Pads a packed batch of variable length sequences
+)
 
 
 class UpliftDataset(Dataset):
 
-    METHOD_TO_IDX = {'LOGIN': 0, 'POST': 1, 'GET': 2, 'PUT': 3}
-    IDX_TO_METHOD = {0: 'LOGIN', 1: 'POST', 2: 'GET', 3: 'PUT'}
+    METHOD_TO_IDX = {'LOGIN': 0, 'POST': 1, 'GET': 2, 'PUT': 3, 'DELETE': 4}
+    IDX_TO_METHOD = {0: 'LOGIN', 1: 'POST', 2: 'GET', 3: 'PUT', 4: 'DELETE'}
 
     def __init__(self, root: str, transform=None, time_transform=None, target_transform=None) -> None:
         super().__init__()
@@ -161,3 +166,42 @@ class UpliftDataset(Dataset):
     def val_by_match(self, val_ratio: float, random_state: int=42, **kwargs) -> Tuple[List[int], List[int]]:
         """Splits the dataset into train and validation by user in match fashion and returns indices."""
         raise NotImplementedError
+
+
+def collate_fn(data, max_length: int=1024, pad_on_right: bool=True):
+    time = [d['timestamp'] for d in data]
+    X = [d['X'] for d in data]
+    t = [d['t'] for d in data]
+    y = [d['y'] for d in data]
+
+    # Pad to the left
+    max_len = max([len(x) for x in X]) # max length of time series
+    X = [
+        torch.cat([torch.zeros(max_len - len(x), x.shape[1], dtype=torch.long, device=x.device), x]) 
+        if not pad_on_right else
+        torch.cat([x, torch.zeros(max_len - len(x), x.shape[1], dtype=torch.long, device=x.device)])
+        for x in X
+    ]
+    X = torch.stack(X, dim=0) # (B, L, D_x)
+
+    time = [
+        torch.cat([torch.zeros(max_len - len(tm), tm.shape[1], dtype=torch.long, device=tm.device), tm])
+        if not pad_on_right else
+        torch.cat([tm, torch.zeros(max_len - len(tm), tm.shape[1], dtype=torch.long, device=tm.device)])
+        for tm in time
+    ]
+    time = torch.stack(time, dim=0) # (B, L, D_time)
+
+    if time.size(1) > max_length:
+        time = time[:, -max_length:, :]
+        X = X[:, -max_length:, :]
+
+    t = torch.stack(t, dim=0) # (B,)
+    y = torch.stack(y, dim=0) # (B,)
+    
+    return {
+        'timestamp': time,
+        'X': X,
+        't': t,
+        'y': y
+    }

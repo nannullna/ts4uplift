@@ -1,7 +1,11 @@
+from typing import List, Union
+
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from .dilated_conv import DilatedConvEncoder
+from .embedding import Embedding
 
 class Encoder(nn.Module):
 
@@ -9,6 +13,7 @@ class Encoder(nn.Module):
 
     def __init__(self):
         super(Encoder, self).__init__()
+        self.embedding: nn.Module = None
         self.encoder: nn.Module = None
 
     def create_pooler(self, pool: str):
@@ -28,26 +33,54 @@ class Encoder(nn.Module):
 
 class TCNEncoder(Encoder):
 
-    def __init__(self, input_dim: int, feature_dim: int, num_layers: int, dropout_p: float = 0.2, pool: str = 'last'):
+    def __init__(
+        self, 
+        num_embeddings: Union[int, List[int]], 
+        embedding_dim: Union[int, List[int]], 
+        feature_dim: int, 
+        num_layers: int, 
+        max_length: int=1024, 
+        dropout_p: float = 0.2, 
+        pool: str = 'last'
+    ):
         super(TCNEncoder, self).__init__()
+        self.embedding = Embedding(num_embeddings, embedding_dim, max_length, dropout_p)
+        input_dim = self.embedding.total_dim
         self.encoder = DilatedConvEncoder(input_dim, [feature_dim] * num_layers, kernel_size=3, dropout_p=dropout_p)
         self.pool = self.create_pooler(pool)
 
     def forward(self, inputs):
-        inputs = inputs.permute(0, 2, 1) # RNN inputs are (B, L, D), but CNN inputs are (B, D, L).
-        z = self.encoder(inputs).permute(0, 2, 1)
-        z = self.pool(z)
-        return z
+        timestamp, X = inputs['timestamp'], inputs['X']
+        X = self.embedding(X)
+        ftrs = torch.cat([timestamp, X], dim=-1)
+        ftrs = ftrs.permute(0, 2, 1) # RNN inputs are (B, L, D), but CNN inputs are (B, D, L).
+        z = self.encoder(ftrs).permute(0, 2, 1)
+        return self.pool(z)
 
 
 class RNNEncoder(Encoder):
     
-    def __init__(self, input_dim: int, feature_dim: int, num_layers: int, dropout_p: float = 0.2, pool: str = 'last', rnn_type: str = 'lstm'):
+    def __init__(
+        self, 
+        num_embeddings: Union[int, List[int]], 
+        embedding_dim: Union[int, List[int]], 
+        feature_dim: int, 
+        num_layers: int, 
+        max_length: int=1024, 
+        dropout_p: float = 0.2, 
+        pool: str = 'last',
+        rnn_type: str = 'lstm'
+    ):
         super(RNNEncoder, self).__init__()
+        self.embedding = Embedding(num_embeddings, embedding_dim, max_length, dropout_p)
+        input_dim = self.embedding.total_dim
         self.encoder = nn.LSTM(input_dim, feature_dim, num_layers, batch_first=True, dropout=dropout_p) if rnn_type == 'lstm' else \
                     nn.GRU(input_dim, feature_dim, num_layers, batch_first=True, dropout=dropout_p)
         self.pool = self.create_pooler(pool)
 
     def forward(self, inputs):
-        z, _ = self.encoder(inputs)
+        timestamp, X = inputs['timestamp'], inputs['X']
+        X = self.embedding(X)
+        ftrs = torch.cat([timestamp, X], dim=-1)
+        z, _ = self.encoder(ftrs)
         return self.pool(z)

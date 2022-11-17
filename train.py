@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Callable, Any
 import os
 import argparse
 from dataclasses import dataclass
@@ -15,6 +15,7 @@ from sklearn.metrics import (
     ConfusionMatrixDisplay,
     RocCurveDisplay,
 )
+from sklift.metrics.metrics import uplift_auc_score, qini_auc_score
 
 import torch
 import torch.nn as nn
@@ -73,38 +74,101 @@ def create_optimizer(config, model: nn.Module):
     return optimizer
 
 
-def train(config, model: nn.Module, train_loader: DataLoader, device: torch.device, optimizer: optim.Optimizer, epoch: int):
+def train(config, model: nn.Module, train_loader: DataLoader, device: torch.device, optimizer: optim.Optimizer, epoch: int) -> Dict[str, float]:
     model.train()
     train_loss = 0.0
+    mse_losses = 0.0
+    bce_losses = 0.0
     for batch_idx, batch in enumerate(train_loader):
         optimizer.zero_grad()
-        batch = {k: v.to(device) for k, v in batch.items()}
-
         # Forward
+        batch = {k: v.to(device) for k, v in batch.items()}
         output = model(batch)
-
         # Loss
         if config.model_type == "siamese":
-            loss = direct_uplift_loss(output, batch, alpha=config.alpha, e_x=0.5)
+            loss, (mse_loss, bce_loss) = direct_uplift_loss(output, batch, alpha=config.alpha, e_x=0.5, return_all=True)
         elif config.model_type == "dragonnet":
-            loss = dragonnet_loss(output, batch, alpha=config.alpha)
+            loss, (mse_loss, bce_loss) = dragonnet_loss(output, batch, alpha=config.alpha, return_all=True)
 
         loss.backward()
         optimizer.step()
         train_loss += loss.item()
-
-        # print(f"Epoch: {epoch} | Batch: {batch_idx} | Loss: {loss.item()}")
+        mse_losses += mse_loss.item()
+        bce_losses += bce_loss.item()
             
     train_loss /= len(train_loader)
+    mse_losses /= len(train_loader)
+    bce_losses /= len(train_loader)
+
     print(f"Train Epoch: {epoch} \tLoss: {train_loss:.6f}")
-    wandb.log({"train/loss": train_loss, "epoch": epoch})
+    wandb.log({"train/loss": train_loss, "train/mse_loss": mse_losses, "train/bce_loss": bce_loss, "epoch": epoch})
 
 
-def valid(config, model: nn.Module, valid_loader: DataLoader, device: torch.device, epoch: int):
-    pass
+def valid(config, model: nn.Module, valid_loader: DataLoader, device: torch.device, epoch: int, calc_metrics: Callable[[Dict[str, torch.Tensor], Dict[str, torch.Tensor]], Dict[str, float]], prefix: str='valid') -> Dict[str, float]:
+    model.eval()
+    valid_loss = 0.0
+    mse_losses = 0.0
+    bce_losses = 0.0
+
+    all_batches = {"y": [], "t": []}
+    all_preds = {"y1": [], "y0": [], "t": []}
+    with torch.no_grad():
+        for batch_idx, batch in enumerate(valid_loader):
+            
+            # To calculate metrics
+            all_batches["y"].append(batch["y"].detach().cpu())
+            all_batches["t"].append(batch["t"].detach().cpu())
+
+            # Forward
+            batch = {k: v.to(device) for k, v in batch.items()}
+            output = model(batch)
+
+            all_preds["y1"].append(output["y1"].detach().cpu())
+            all_preds["y0"].append(output["y0"].detach().cpu())
+            if "t" in output:
+                all_preds["t"].append(output["t"].detach().cpu())
+            
+            # Loss
+            if config.model_type == "siamese":
+                loss, (mse_loss, bce_loss) = direct_uplift_loss(output, batch, alpha=config.alpha, e_x=0.5, return_all=True)
+            elif config.model_type == "dragonnet":
+                loss, (mse_loss, bce_loss) = dragonnet_loss(output, batch, alpha=config.alpha, return_all=True)
+
+            valid_loss += loss.item()
+            mse_losses += mse_loss.item()
+            bce_losses += bce_loss.item()
+
+    all_batches = {k: torch.cat(v, dim=0) for k, v in all_batches.items()}
+    all_preds = {k: torch.cat(v, dim=0) for k, v in all_preds.items()}
+    
+    valid_loss /= len(valid_loader)
+    mse_losses /= len(valid_loader)
+    bce_losses /= len(valid_loader)
+
+    metrics = {f"{prefix}/loss": valid_loss, f"{prefix}/mse_loss": mse_losses, f"{prefix}/bce_loss": bce_losses, "epoch": epoch}
+    if calc_metrics is not None:
+        valid_metrics = calc_metrics(all_batches, all_preds)
+        metrics.update({f"{prefix}/{k}": v for k, v in valid_metrics.items()})
+    
+    return metrics
 
 
-def direct_uplift_loss(out: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor], alpha: float=0.5, e_x: float=0.5) -> torch.Tensor:
+def calc_metrics(targets: Dict[str, Any], preds: Dict[str, Any]) -> Dict[str, float]:
+    metrics = {}
+    if "uplift" in preds:
+        uplift = preds["uplift"]
+    else:
+        uplift = preds['y1'] - preds['y0']
+    
+    metrics["uplift_auc"] = uplift_auc_score(targets["y"], uplift, targets["t"])
+    metrics["qini_auc"] = qini_auc_score(targets["y"], uplift, targets["t"])
+    if "t" in preds:
+        metrics["treatment_auc"] = roc_auc_score(targets["t"], preds["t"])
+
+    return metrics
+
+
+def direct_uplift_loss(out: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor], alpha: float=0.5, e_x: float=0.5, return_all: bool=False) -> torch.Tensor:
     """Direct uplift loss. out - y1, y0 // batch - y, t"""
     y1 = out["y1"]
     y0 = out["y0"]
@@ -118,10 +182,13 @@ def direct_uplift_loss(out: Dict[str, torch.Tensor], batch: Dict[str, torch.Tens
     loss_pred = F.binary_cross_entropy(y_pred, y)
 
     total_loss = (1-alpha) * loss_uplift + alpha * loss_pred
-    return total_loss
+    if return_all:
+        return total_loss, (loss_uplift, loss_pred)
+    else:
+        return total_loss
 
 
-def dragonnet_loss(out: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor], alpha: float=0.5) -> torch.Tensor:
+def dragonnet_loss(out: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor], alpha: float=0.5, return_all: bool=False) -> torch.Tensor:
     """Dragonnet loss. out - y1, y0, y // batch - y, t"""
     y1 = out["y1"]
     y0 = out["y0"]
@@ -135,7 +202,10 @@ def dragonnet_loss(out: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor],
     loss_pred = F.binary_cross_entropy(t_pred, t)
 
     total_loss = (1-alpha) * loss_uplift + alpha * loss_pred
-    return total_loss
+    if return_all:
+        return total_loss, (loss_uplift, loss_pred)
+    else:
+        return total_loss
 
 
 def main(config):
@@ -147,12 +217,18 @@ def main(config):
     
     # Load data
     raw_datasets = UpliftDataset(config.dataset_path)
-
     train_set, valid_set = raw_datasets.split_valid(by='user', val_ratio=config.val_ratio, random_state=config.dataset_seed)
     train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, drop_last=True,
         collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
     valid_loader = DataLoader(valid_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
         collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
+    if config.test_path is not None:
+        test_set = UpliftDataset(config.test_path)
+        test_loader = DataLoader(test_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
+            collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
+    else:
+        test_set = None
+        test_loader = None
 
     # Load model and optimizer
     model = create_model(config)
@@ -161,7 +237,9 @@ def main(config):
 
     for epoch in range(1, config.epochs+1):
         train(config, model, train_loader, device, optimizer, epoch)
-        valid(config, model, valid_loader, device, epoch)
+        valid(config, model, valid_loader, device, epoch, calc_metrics=calc_metrics, prefix='valid')
+        if test_loader is not None:
+            valid(config, model, test_loader, device, epoch, calc_metrics=calc_metrics, prefix='test')
 
 
 if __name__ == "__main__":

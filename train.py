@@ -80,7 +80,7 @@ def train(config, model: nn.Module, train_loader: DataLoader, device: torch.devi
     train_loss = 0.0
     mse_losses = 0.0
     bce_losses = 0.0
-    for batch_idx, batch in enumerate(tqdm(train_loader, ncols=60, desc=f'epoch:{epoch} train')):
+    for batch_idx, batch in enumerate(tqdm(train_loader, ncols=80, desc=f'Epoch:{epoch} train', leave=False)):
         optimizer.zero_grad()
         # Forward
         batch = {k: v.to(device) for k, v in batch.items()}
@@ -115,7 +115,7 @@ def valid(config, model: nn.Module, valid_loader: DataLoader, device: torch.devi
     all_batches = {"y": [], "t": []}
     all_preds = {"y1": [], "y0": [], "t": []}
     with torch.no_grad():
-        for batch_idx, batch in enumerate(tqdm(valid_loader, ncols=60, desc=f'epoch:{epoch} {prefix}')):
+        for batch_idx, batch in enumerate(tqdm(valid_loader, ncols=80, desc=f'Epoch:{epoch} {prefix}', leave=False)):
             
             # To calculate metrics
             all_batches["y"].append(batch["y"].detach().cpu())

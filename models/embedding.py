@@ -7,7 +7,7 @@ import torch.nn as nn
 
 
 class Embedding(nn.Module):
-    def __init__(self, num_embeddings: Union[int, List[int]], embedding_dim: Union[int, List[int]], max_length: int=1024, dropout_p: float = 0.2, use_layer_norm: bool=True, layer_norm_eps: float = 1e-5):
+    def __init__(self, num_embeddings: Union[int, List[int]], embedding_dim: Union[int, List[int]], max_length: int=1024, dropout_p: float = 0.2, use_layer_norm: bool=True, layer_norm_eps: float = 1e-5, positional_embedding: bool=True):
         """
         Arguments:
             num_embeddings: int
@@ -31,10 +31,13 @@ class Embedding(nn.Module):
             nn.Embedding(emb, dim, 0)
             for emb, dim in zip(self.num_embeddings, self.embedding_dim)
         )
-        self.position_embeddings = nn.Embedding.from_pretrained(
-            self.create_sinosoidal_embeddings(max_length, self.total_dim), 
-            freeze=True,
-        )
+        if positional_embedding:
+            self.position_embeddings = nn.Embedding.from_pretrained(
+                self.create_sinosoidal_embeddings(max_length, self.total_dim), 
+                freeze=True,
+            )
+        else:
+            self.position_embeddings = None
 
         self.layer_norm = nn.LayerNorm(self.total_dim, eps=layer_norm_eps) if use_layer_norm else None
         self.dropout = nn.Dropout(dropout_p) if dropout_p > 0 else None
@@ -62,15 +65,17 @@ class Embedding(nn.Module):
             inputs = inputs.unsqueeze(2) # (B, L, 1)
         B, L, D = inputs.size() # B: batch size, L: sequence length, D: input dimension
         
-        position_ids = self.position_ids[:, 0:L].to(inputs.device)
-        position_embeddings = self.position_embeddings(position_ids)
+        if self.position_embeddings is not None:
+            position_ids = self.position_ids[:, 0:L].to(inputs.device)
+            position_embeddings = self.position_embeddings(position_ids)
 
         embeddings = []
         for i, input in enumerate(inputs.split(1, dim=2)):
             embeddings.append(self.input_embeddings[i](input.squeeze(2))) # (B, L) -> (B, L, D_i)
         embeddings = torch.cat(embeddings, dim=2) # (B, L, D)
 
-        embeddings += position_embeddings
+        if self.position_embeddings is not None:
+            embeddings += position_embeddings
         if self.layer_norm is not None:
             embeddings = self.layer_norm(embeddings)
         if self.dropout is not None:

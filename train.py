@@ -22,7 +22,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader, Subset
+from torch.utils.data import Dataset, DataLoader, Subset, ConcatDataset
 
 
 import wandb
@@ -185,8 +185,8 @@ def direct_uplift_loss(out: Dict[str, torch.Tensor], batch: Dict[str, torch.Tens
     z = t * y / e_x - (1-t) * y / (1-e_x)
     y_pred = torch.where(t == 1, y1, y0)
 
-    loss_uplift = F.mse_loss((y1 - y0), z)
-    loss_pred = F.binary_cross_entropy(y_pred, y)
+    loss_uplift = F.mse_loss((y1 - y0), z) # {(y1_hat - y0_hat) - z}^2
+    loss_pred = F.binary_cross_entropy(y_pred, y) # {y|T=t, y_true}
 
     total_loss = (1-alpha) * loss_uplift + alpha * loss_pred
     if return_all:
@@ -205,9 +205,9 @@ def dragonnet_loss(out: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor],
 
     y_pred = torch.where(t == 1, y1, y0)
 
-    loss_uplift = F.mse_loss(y_pred, y)
-    loss_pred = F.binary_cross_entropy(t_pred, t)
-
+    loss_uplift = F.mse_loss(y_pred, y) # E[(y1 - y0)]
+    loss_pred = F.binary_cross_entropy(t_pred, t) # E[T=1|X]   T <-//- e(X) <-- X --> Y
+ 
     total_loss = (1-alpha) * loss_uplift + alpha * loss_pred
     if return_all:
         return total_loss, (loss_uplift, loss_pred)
@@ -222,13 +222,20 @@ def main(config):
     if config.seed is not None:
         set_seed(config.seed)
     
-    # Load data
-    raw_datasets = UpliftDataset(config.dataset_path)
-    train_set, valid_set = raw_datasets.split_valid(by='user', val_ratio=config.val_ratio, random_state=config.dataset_seed)
+    # Load multiple datasets
+    train_sets, valid_sets = [], []
+    for dataset_path in config.dataset_path:
+        raw_datasets = UpliftDataset(dataset_path)
+        train_set, valid_set = raw_datasets.split_valid(by='user', val_ratio=config.val_ratio, random_state=config.dataset_seed)
+        train_sets.append(train_set)
+        valid_sets.append(valid_set)
+    train_set, valid_set = ConcatDataset(train_sets), ConcatDataset(valid_sets)
+
     train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, drop_last=True,
         collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
     valid_loader = DataLoader(valid_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
         collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
+    
     if config.test_path is not None:
         test_set = UpliftDataset(config.test_path)
         test_loader = DataLoader(test_set, batch_size=config.batch_size, shuffle=False, drop_last=False,

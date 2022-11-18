@@ -23,7 +23,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, Subset, ConcatDataset
-
+from torch.optim.swa_utils import AveragedModel
 
 import wandb
 from tqdm import tqdm
@@ -255,6 +255,10 @@ def main(config):
     model.to(device)
     if not config.disable_wandb:
         wandb.watch(model, log="all", log_freq=100)
+    if config.use_swa:
+        swa_model = AveragedModel(model)
+    else:
+        swa_model = None
 
     print(f"Model has {calc_num_params(model):,} trainable parameters")
     optimizer = create_optimizer(config, model)
@@ -264,24 +268,27 @@ def main(config):
         all_metrics = {}
 
         train_metrics = train(config, model, train_loader, device, optimizer, epoch)
+        if config.use_swa:
+            swa_model.update_parameters(model)
+
         all_metrics.update(train_metrics)
         if not config.disable_wandb:
             wandb.log(train_metrics)
         
         if epoch % config.eval_every == 0:
-            valid_metrics = valid(config, model, valid_loader, device, epoch, calc_metrics=calc_metrics, prefix='valid')    
+            valid_metrics = valid(config, swa_model if config.use_swa else model, valid_loader, device, epoch, calc_metrics=calc_metrics, prefix='valid')    
             all_metrics.update(valid_metrics)
             if not config.disable_wandb:
                 wandb.log(valid_metrics)
         
             if test_loader is not None:
-                test_metrics = valid(config, model, test_loader, device, epoch, calc_metrics=calc_metrics, prefix='test')
+                test_metrics = valid(config, swa_model if config.use_swa else model, test_loader, device, epoch, calc_metrics=calc_metrics, prefix='test')
                 if not config.disable_wandb:
                     wandb.log(test_metrics)
                 all_metrics.update(test_metrics)
 
         if epoch % config.save_every == 0:
-            save_model(config, model, optimizer, epoch, all_metrics, config.save_dir)
+            save_model(config, swa_model if config.use_swa else model, optimizer, epoch, all_metrics, config.save_dir)
 
 
 if __name__ == "__main__":

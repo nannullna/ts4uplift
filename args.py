@@ -20,6 +20,8 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
 
     parser.add_argument("--alpha", type=float, default=0.2)
 
+    parser.add_argument("--use_swa", action='store_true')
+
     return parser
 
 

@@ -215,6 +215,10 @@ def dragonnet_loss(out: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor],
         return total_loss
 
 
+def calc_num_params(model: nn.Module) -> int:
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
 def main(config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
 
@@ -251,6 +255,8 @@ def main(config):
     model.to(device)
     if not config.disable_wandb:
         wandb.watch(model, log="all", log_freq=100)
+
+    print(f"Model has {calc_num_params(model):,} trainable parameters")
     optimizer = create_optimizer(config, model)
 
     for epoch in range(1, config.epochs+1):

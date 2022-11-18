@@ -80,7 +80,7 @@ def train(config, model: nn.Module, train_loader: DataLoader, device: torch.devi
     train_loss = 0.0
     mse_losses = 0.0
     bce_losses = 0.0
-    for batch_idx, batch in enumerate(train_loader):
+    for batch_idx, batch in enumerate(tqdm(train_loader, ncols=60, desc=f'epoch:{epoch} train')):
         optimizer.zero_grad()
         # Forward
         batch = {k: v.to(device) for k, v in batch.items()}
@@ -115,7 +115,7 @@ def valid(config, model: nn.Module, valid_loader: DataLoader, device: torch.devi
     all_batches = {"y": [], "t": []}
     all_preds = {"y1": [], "y0": [], "t": []}
     with torch.no_grad():
-        for batch_idx, batch in enumerate(valid_loader):
+        for batch_idx, batch in enumerate(tqdm(valid_loader, ncols=60, desc=f'epoch:{epoch} {prefix}')):
             
             # To calculate metrics
             all_batches["y"].append(batch["y"].detach().cpu())
@@ -303,7 +303,9 @@ if __name__ == "__main__":
     parser = add_model_args(parser)
     args = parser.parse_args()
 
-    model_name = f"{args.model_type}_{args.backbone_type}_lr{args.lr:1e}_fdim{args.feature_dim}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    model_name = f"{args.model_type}_{args.backbone_type}_lr{args.lr:1.0e}_fdim{args.feature_dim}"
+    if args.flag is not None: model_name += f"_{args.flag}"
+    model_name += f"_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     if args.save_dir is not None:
         args.save_dir = os.path.join(args.save_dir, model_name)
         os.makedirs(args.save_dir, exist_ok=True)

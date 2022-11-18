@@ -45,7 +45,7 @@ class TCNEncoder(Encoder):
     ):
         super(TCNEncoder, self).__init__()
         self.embedding = Embedding(num_embeddings, embedding_dim, max_length, dropout_p)
-        input_dim = self.embedding.total_dim + 4  # for timestamp embedding
+        input_dim = self.embedding.total_dim + 6  # for timestamp embedding
         self.encoder = DilatedConvEncoder(input_dim, [feature_dim] * num_layers, kernel_size=3, dropout_p=dropout_p)
         self.pool = self.create_pooler(pool)
 
@@ -73,7 +73,7 @@ class RNNEncoder(Encoder):
     ):
         super(RNNEncoder, self).__init__()
         self.embedding = Embedding(num_embeddings, embedding_dim, max_length, dropout_p)
-        input_dim = self.embedding.total_dim + 4  # for timestamp embedding
+        input_dim = self.embedding.total_dim + 6  # for timestamp embedding
         self.encoder = nn.LSTM(input_dim, feature_dim, num_layers, batch_first=True, dropout=dropout_p) if rnn_type == 'lstm' else \
                     nn.GRU(input_dim, feature_dim, num_layers, batch_first=True, dropout=dropout_p)
         self.pool = self.create_pooler(pool)

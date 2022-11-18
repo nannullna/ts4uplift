@@ -13,12 +13,57 @@ from torch.nn.utils.rnn import (
 )
 
 
+
+def second_embedding(x: np.ndarray) -> np.ndarray:
+    # unit is second in [0, 60)
+    return np.stack([np.sin(2 * np.pi / 60 * x), np.cos(2 * np.pi / 60 * x)])
+
+def daily_embedding(x: np.ndarray) -> np.ndarray:
+    # unit is hour in [0, 24)
+    return np.stack([np.sin(2 * np.pi / 24 * x), np.cos(2 * np.pi / 24 * x)])
+
+def weekly_embedding(x: np.ndarray) -> np.ndarray:
+    # unit is dayofweek in [0, 6]
+    return np.stack([np.sin(2 * np.pi / 7 * x), np.cos(2 * np.pi / 7 * x)])
+
+
+def default_time_transform(X: pd.Series) -> torch.Tensor:
+
+    day_of_week = np.array(X.dt.dayofweek) # (L,)
+    hour_of_day = np.array(X.dt.hour + X.dt.minute / 60)
+    sec_of_hour = np.array(X.dt.second + X.dt.microsecond / 1e6)
+
+    embedding_D = daily_embedding(hour_of_day) # (2, L)
+    embedding_W = weekly_embedding(day_of_week) # (2, L)
+    embedding_S = second_embedding(sec_of_hour) # (2, L)
+    
+    x = torch.tensor(np.concatenate([embedding_W, embedding_D, embedding_S], axis=0).T, dtype=torch.float32).contiguous() # (L, 6)
+
+    return x
+
+
+def binning_transform(df: pd.DataFrame, start, end, freq='10T'):
+    """Binning transform for time series data"""
+    bins = pd.date_range(start=start, end=end, freq=freq)
+    time_cut = pd.cut(df['timestamp'], bins=bins, right=False)
+
+    time_cut = time_cut.value_counts().sort_index()
+    time_cut = time_cut.fillna(0)
+    time_cut = torch.tensor(time_cut, dtype=torch.float32)
+
+    time_emb = default_time_transform(bins[:-1].to_series())
+
+    assert time_cut.shape[0] == time_emb.shape[0], f'{time_cut.shape[0]} != {time_emb.shape[0]}'
+
+    return time_emb, time_cut
+
+
 class UpliftDataset(Dataset):
 
     METHOD_TO_IDX = {'LOGIN': 0, 'POST': 1, 'GET': 2, 'PUT': 3, 'DELETE': 4}
     IDX_TO_METHOD = {0: 'LOGIN', 1: 'POST', 2: 'GET', 3: 'PUT', 4: 'DELETE'}
 
-    def __init__(self, root: str, transform=None, time_transform=None, target_transform=None) -> None:
+    def __init__(self, root: str, preprocess=None, time_transform=None, feature_transform=None, target_transform=None) -> None:
         super().__init__()
         self.root = root
         try:
@@ -26,8 +71,9 @@ class UpliftDataset(Dataset):
         except FileNotFoundError:
             self.info = pd.read_json(os.path.join(self.root, 'info.json'))
         
-        self.transform = transform if transform is not None else self.default_transform
+        self.preprocess = preprocess
         self.time_transform = time_transform if time_transform is not None else self.default_time_transform
+        self.feature_transform = feature_transform if feature_transform is not None else self.default_feature_transform
         self.target_transform = target_transform  if target_transform is not None else self.default_target_transform
 
         self.target_y_idx = 0
@@ -49,14 +95,13 @@ class UpliftDataset(Dataset):
         
         X, T, Y = self.load_data(index)
 
-        timestamp = X['timestamp']
-        timestamp = self.time_transform(timestamp)
+        if self.preprocess is not None:
+            timestamp, ftrs = self.preprocess(X, T, Y)
 
-        ftrs = X.drop(columns=['timestamp'], inplace=False)
-        if self.transform is not None:
-            ftrs = self.transform(ftrs)
         else:
-            ftrs = torch.tensor(ftrs.values, dtype=torch.float32)
+            timestamp = X['timestamp']
+            timestamp = self.time_transform(timestamp)
+            ftrs = self.feature_transform(X)
         
         if self.target_transform is not None:
             T, Y = self.target_transform(T, Y)
@@ -66,7 +111,7 @@ class UpliftDataset(Dataset):
         return {'timestamp': timestamp, 'X': ftrs, 't': T, 'y': Y}
 
 
-    def default_transform(self, ftrs: pd.DataFrame) -> torch.Tensor:
+    def default_feature_transform(self, ftrs: pd.DataFrame) -> torch.Tensor:
         """Default transform for features."""
         x1 = torch.tensor(ftrs['action'], dtype=torch.long)
         x2 = torch.tensor(ftrs['method'].apply(lambda x: self.METHOD_TO_IDX[x]), dtype=torch.long)
@@ -74,23 +119,7 @@ class UpliftDataset(Dataset):
 
 
     def default_time_transform(self, X: pd.Series) -> torch.Tensor:
-
-        def daily_embedding(x: np.ndarray) -> np.ndarray:
-            # unit is hour in [0, 24)
-            return np.stack([np.sin(2 * np.pi / 24 * x), np.cos(2 * np.pi / 24 * x)])
-
-        def weekly_embedding(x: np.ndarray) -> np.ndarray:
-            # unit is dayofweek in [0, 6]
-            return np.stack([np.sin(2 * np.pi / 7 * x), np.cos(2 * np.pi / 7 * x)])
-
-        day_of_week = np.array(X.dt.dayofweek) # (L,)
-        hour_of_day = np.array(X.dt.hour + X.dt.minute / 60)
-        embedding_D = daily_embedding(hour_of_day) # (2, L)
-        embedding_W = weekly_embedding(day_of_week) # (2, L)
-        
-        x = torch.tensor(np.concatenate([embedding_W, embedding_D], axis=0).T, dtype=torch.float32) # (L, 4)
-
-        return x
+        return default_time_transform(X)
 
     
     def default_target_transform(self, T: int, Y: int) -> Tuple[torch.Tensor, torch.Tensor]:

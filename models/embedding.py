@@ -7,7 +7,7 @@ import torch.nn as nn
 
 
 class Embedding(nn.Module):
-    def __init__(self, num_embeddings: Union[int, List[int]], embedding_dim: Union[int, List[int]], max_length: int=1024, dropout_p: float = 0.2, use_layer_norm: bool=True, layer_norm_eps: float = 1e-5, positional_embedding: bool=True):
+    def __init__(self, num_embeddings: Union[int, List[int]], embedding_dim: Union[int, List[int]], max_length: int=1024, dropout_p: float = 0.2, use_layer_norm: bool=True, layer_norm_eps: float = 1e-5, positional_embedding: bool=True, flipped_embedding: bool=False):
         """
         Arguments:
             num_embeddings: int
@@ -33,7 +33,7 @@ class Embedding(nn.Module):
         )
         if positional_embedding:
             self.position_embeddings = nn.Embedding.from_pretrained(
-                self.create_sinosoidal_embeddings(max_length, self.total_dim), 
+                self.create_sinosoidal_embeddings(max_length, self.total_dim, flipped=flipped_embedding), 
                 freeze=True,
             )
         else:
@@ -44,12 +44,16 @@ class Embedding(nn.Module):
         self.position_ids = torch.arange(max_length).expand((1, -1))
 
 
-    def create_sinosoidal_embeddings(self, max_length: int, embedding_dim: int):
+    def create_sinosoidal_embeddings(self, max_length: int, embedding_dim: int, flipped: bool=False):
         emb = torch.empty(max_length, embedding_dim)
         pos_ids = torch.arange(0, max_length).unsqueeze(1)
         div = torch.exp((torch.arange(0, embedding_dim, 2, dtype=torch.float) * -(math.log(10000.) / embedding_dim)))
-        emb[:, 0::2] = torch.sin(pos_ids.float() * div)
-        emb[:, 1::2] = torch.cos(pos_ids.float() * div)
+        if flipped:
+            emb[:, 0::2] = torch.flip(torch.sin(pos_ids.float() * div), [1])
+            emb[:, 1::2] = torch.flip(torch.cos(pos_ids.float() * div), [1])
+        else:
+            emb[:, 0::2] = torch.sin(pos_ids.float() * div)
+            emb[:, 1::2] = torch.cos(pos_ids.float() * div)
         return emb
 
 

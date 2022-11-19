@@ -42,10 +42,11 @@ class TCNEncoder(Encoder):
         max_length: int=1024, 
         dropout_p: float = 0.2, 
         positional_embedding: bool=True,
+        flipped_embedding: bool=False,
         pool: str = 'last'
     ):
         super(TCNEncoder, self).__init__()
-        self.embedding = Embedding(num_embeddings, embedding_dim, max_length, dropout_p, positional_embedding=positional_embedding)
+        self.embedding = Embedding(num_embeddings, embedding_dim, max_length, dropout_p, positional_embedding=positional_embedding, flipped_embedding=flipped_embedding)
         input_dim = self.embedding.total_dim + 6  # for timestamp embedding
         self.encoder = DilatedConvEncoder(input_dim, [feature_dim] * num_layers, kernel_size=3, dropout_p=dropout_p)
         self.pool = self.create_pooler(pool)
@@ -70,11 +71,12 @@ class RNNEncoder(Encoder):
         max_length: int=1024, 
         dropout_p: float = 0.2, 
         positional_embedding: bool=True,
+        flipped_embedding: bool=False,
         pool: str = 'last',
         rnn_type: str = 'lstm'
     ):
         super(RNNEncoder, self).__init__()
-        self.embedding = Embedding(num_embeddings, embedding_dim, max_length, dropout_p, positional_embedding=positional_embedding)
+        self.embedding = Embedding(num_embeddings, embedding_dim, max_length, dropout_p, positional_embedding=positional_embedding, flipped_embedding=flipped_embedding)
         input_dim = self.embedding.total_dim + 6  # for timestamp embedding
         self.encoder = nn.LSTM(input_dim, feature_dim, num_layers, batch_first=True, dropout=dropout_p) if rnn_type == 'lstm' else \
                     nn.GRU(input_dim, feature_dim, num_layers, batch_first=True, dropout=dropout_p)

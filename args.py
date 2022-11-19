@@ -31,6 +31,7 @@ def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--backbone_type", type=str, default="tcn", choices=["tcn", "lstm", "gru"])
     parser.add_argument("--pool_type", type=str, default="last")
     parser.add_argument("--no_positional_embedding", action='store_true')
+    parser.add_argument("--flipped_embedding", action='store_true')
     
     parser.add_argument("--embedding_dim", type=int, default=16)
     parser.add_argument("--feature_dim", type=int, default=64)

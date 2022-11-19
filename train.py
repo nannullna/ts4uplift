@@ -80,7 +80,7 @@ def train(config, model: nn.Module, train_loader: DataLoader, device: torch.devi
     train_loss = 0.0
     mse_losses = 0.0
     bce_losses = 0.0
-    for batch_idx, batch in enumerate(train_loader):
+    for batch_idx, batch in enumerate(tqdm(train_loader, ncols=80, desc=f'Epoch: {epoch} train', leave=False)):
         optimizer.zero_grad()
         # Forward
         batch = {k: v.to(device) for k, v in batch.items()}
@@ -115,7 +115,7 @@ def valid(config, model: nn.Module, valid_loader: DataLoader, device: torch.devi
     all_batches = {"y": [], "t": []}
     all_preds = {"y1": [], "y0": [], "t": []}
     with torch.no_grad():
-        for batch_idx, batch in enumerate(valid_loader):
+        for batch_idx, batch in enumerate(tqdm(valid_loader, ncols=80, desc=f'Epoch: {epoch} {prefix}', leave=False)):
             
             # To calculate metrics
             all_batches["y"].append(batch["y"].detach().cpu())
@@ -241,10 +241,13 @@ def main(config):
         collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
     
     if config.test_path is not None:
-        test_set = UpliftDataset(config.test_path)
-        test_loader = DataLoader(test_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
-            collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
-        print(f"Train size: {len(train_set)}, valid size: {len(valid_set)}, test size: {len(test_set)}")
+        test_loader = {}
+        for test_path in config.test_path:
+            testset_name = os.path.basename(test_path)
+            test_set = UpliftDataset(test_path)
+            test_loader[testset_name] = DataLoader(test_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
+                collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
+        print(f"Train size: {len(train_set)}, valid size: {len(valid_set)}, test size:" f"{testset_name} {len(test_loader[testset_name].dataset)}" for testset_name in test_loader.keys())
     else:
         test_set = None
         test_loader = None
@@ -282,9 +285,11 @@ def main(config):
                 wandb.log(valid_metrics)
         
             if test_loader is not None:
-                test_metrics = valid(config, swa_model if config.use_swa else model, test_loader, device, epoch, calc_metrics=calc_metrics, prefix='test')
-                if not config.disable_wandb:
-                    wandb.log(test_metrics)
+                for testset_name in test_loader:
+                    test_metrics = valid(config, swa_model if config.use_swa else model, test_loader[testset_name], device, epoch, calc_metrics=calc_metrics, prefix=f'test/{testset_name}')
+                    all_metrics.update(test_metrics)
+                    if not config.disable_wandb:
+                        wandb.log(test_metrics)
                 all_metrics.update(test_metrics)
 
         if epoch % config.save_every == 0:
@@ -298,12 +303,15 @@ if __name__ == "__main__":
     parser = add_model_args(parser)
     args = parser.parse_args()
 
+    model_name = f"{args.model_type}_{args.backbone_type}_lr{args.lr:1.0e}_fdim{args.feature_dim}"
+    if args.flag is not None: model_name += f"_{args.flag}"
+    model_name += f"_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     if args.save_dir is not None:
-        args.save_dir = os.path.join(args.save_dir, f"{args.model_type}_{args.backbone_type}_{datetime.now().strftime('%Y%m%d-%H%M%S')}")
+        args.save_dir = os.path.join(args.save_dir, model_name)
         os.makedirs(args.save_dir, exist_ok=True)
 
     if not args.disable_wandb:
-        wandb.init(project="aaai23", config=args)
+        wandb.init(project="aaai23", config=args, name=model_name)
         config = wandb.config
     else:
         config = args

@@ -3,6 +3,7 @@ import argparse
 def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Add training arguments to the parser"""
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--flag", type=str, default=None)
     parser.add_argument("--save_dir", type=str, default='saved/')
     parser.add_argument("--disable_wandb", action='store_true')
     parser.add_argument("--disable_tqdm", action='store_true')
@@ -44,8 +45,9 @@ def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
 
 def add_dataset_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Add dataset arguments to the parser"""
+    # parser.add_argument("--data_root", type=str, required=True)
     parser.add_argument("--dataset_path", type=str, nargs='+', required=True)
-    parser.add_argument("--test_path", type=str, required=False)
+    parser.add_argument("--test_path", type=str, nargs='+', required=False)
     parser.add_argument("--dataset_seed", type=int, default=42)
     parser.add_argument("--max_length", type=int, default=1024)
     parser.add_argument("--val_ratio", type=float, default=0.2)

@@ -290,6 +290,7 @@ def main(config):
                     wandb.run.summary["best_metric"] = best_metric
                     wandb.run.summary["best_epoch"] = best_epoch
                 torch.save(swa_model.module.state_dict() if config.use_swa else model.state_dict(), os.path.join(config.save_dir, "best_model.pt"))
+                print(f"Best model saved at epoch {epoch}")
 
             all_metrics.update(valid_metrics)
             if not config.disable_wandb:

@@ -127,14 +127,16 @@ class UpliftDataset(Dataset):
         return torch.tensor(T, dtype=torch.float), torch.tensor(Y[self.target_y_idx], dtype=torch.float) # (1,), (1,)
 
 
-    def split_valid(self, by: str='random', val_ratio: float=0.2, random_state: int=42, **kwargs) -> Tuple[Subset, Subset]:
+    def split(self, by: str='random', ratio: float=0.2, random_state: int=42, **kwargs) -> Tuple[Subset, Subset]:
         """Splits the dataset into train and validation by user."""
         if by == 'random':
-            train_ids, valid_ids = self.val_by_random(val_ratio, random_state, **kwargs)
+            train_ids, valid_ids = self.val_by_random(ratio, random_state, **kwargs)
         elif by == 'user':
-            train_ids, valid_ids = self.val_by_user(val_ratio, random_state, **kwargs)
+            train_ids, valid_ids = self.val_by_user(ratio, random_state, **kwargs)
         elif by == 'match':
-            train_ids, valid_ids = self.val_by_match(val_ratio, random_state, **kwargs)
+            train_ids, valid_ids = self.val_by_match(ratio, random_state, **kwargs)
+        elif by == 'test':
+            train_ids, valid_ids = self.test_split(ratio, random_state, **kwargs)
         else:
             raise ValueError(f'Invalid split method: {by}')
         return Subset(self, train_ids), Subset(self, valid_ids)
@@ -151,30 +153,37 @@ class UpliftDataset(Dataset):
         raise (train_ids, val_ids)
 
 
-    def val_by_user(self, val_ratio: float, random_state: int=42, **kwargs) -> Tuple[List[int], List[int]]:
-        """Splits the dataset into train and validation by user in random fashion and returns indices.
-        
+    def split_users_by_treatment(self, df: pd.DataFrame) -> Dict[int, List[str]]:
+        """Splits users by treatment into three groups.
+
         There are three types of users in the dataset.
             1) T=0 only exists. --> entirely added to T=0 group
             2) T=1 only exists. --> entirely added to T=1 group
             3) Both T=0 and T=1 exist.
         """
-        np.random.seed(random_state)
-
         # First, split users into three groups.
         gamer_to_group = defaultdict(int)
-        for i, info in self.info.iterrows():
+        for i, info in df.iterrows():
             gamer_id = info['X'].split('_')[0]
             t = info['T']
             gamer_to_group[gamer_id] += 2**t
 
         # Second, split users in each group into train and validation.
-        group_ids = {1: [], 2: [], 3: []}
+        group_to_gamers = {1: [], 2: [], 3: []}
         for k, v in gamer_to_group.items():
-            group_ids[v].append(k)
-        train_gamers, val_gamers = [], []
+            group_to_gamers[v].append(k)
+        
+        return group_to_gamers
 
-        for group_id, gamer_ids in group_ids.items():
+
+    def val_by_user(self, val_ratio: float, random_state: int=42, **kwargs) -> Tuple[List[int], List[int]]:
+        """Splits the dataset into train and validation by unique user in random fashion and returns indices.
+        """
+        group_to_gamers = self.split_users_by_treatment(self.info)
+        
+        np.random.seed(random_state)
+        train_gamers, val_gamers = [], []
+        for group_id, gamer_ids in group_to_gamers.items():
             print(f"Group {group_id}: {len(gamer_ids)} users.")
 
             gamer_ids_np = np.asarray(gamer_ids)
@@ -190,6 +199,33 @@ class UpliftDataset(Dataset):
         val_ids   = [i for i, info in self.info.iterrows() if info['X'].split('_')[0] in val_gamers]
 
         return (train_ids, val_ids)
+
+    
+    def test_split(self, propensity_score: float=0.5, random_state: int=42, **kwargs) -> Tuple[List[int], List[int]]:
+        """Splits users in both T=1 and T=0 groups in random fashion for no overlap in users. No validation set."""
+        group_to_gamers = self.split_users_by_treatment(self.info)
+
+        # First handle users in both groups.
+        gamers_in_both = group_to_gamers[3]
+
+        np.random.seed(random_state)
+        unif = np.random.rand(len(gamers_in_both))
+        ids = unif.argsort()
+        t1_size = int(propensity_score * len(gamers_in_both))
+        gamers_in_both_t1 = gamers_in_both[ids[:t1_size]]
+        gamers_in_both_t0 = gamers_in_both[ids[t1_size:]]
+
+        test_ids = [i for i, info in self.info.iterrows() if (info['X'].split('_')[0] in gamers_in_both_t1) and (info['T'] == 1)]
+        test_ids += [i for i, info in self.info.iterrows() if (info['X'].split('_')[0] in gamers_in_both_t0) and (info['T'] == 0)]
+
+        # Second handle users in either group.
+        gamers_in_t0 = group_to_gamers[1]
+        gamers_in_t1 = group_to_gamers[2]
+
+        test_ids += [i for i, info in self.info.iterrows() if info['X'].split('_')[0] in gamers_in_t1]
+        test_ids += [i for i, info in self.info.iterrows() if info['X'].split('_')[0] in gamers_in_t0]
+
+        return (test_ids, [])
     
 
     def val_by_match(self, val_ratio: float, random_state: int=42, **kwargs) -> Tuple[List[int], List[int]]:

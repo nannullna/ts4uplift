@@ -42,11 +42,11 @@ NUM_METHODS = 5
 
 def create_encoder(config):
     if config.backbone_type == "tcn":
-        encoder = TCNEncoder([NUM_ACTIONS, NUM_METHODS], [config.embedding_dim, 2], config.feature_dim, num_layers=config.num_layers, max_length=config.max_length, dropout_p=config.dropout, positional_embedding=not config.no_positional_embedding, pool=config.pool_type)
+        encoder = TCNEncoder([NUM_ACTIONS, NUM_METHODS], [config.embedding_dim, 2], config.feature_dim, num_layers=config.num_layers, max_length=config.max_length, dropout_p=config.dropout, positional_embedding=not config.no_positional_embedding, flipped_embedding=config.flipped_embedding, no_embedding=config.no_embedding, pool=config.pool_type)
     elif config.backbone_type == "lstm":
-        encoder = RNNEncoder([NUM_ACTIONS, NUM_METHODS], [config.embedding_dim, 2], config.feature_dim, num_layers=config.num_layers, max_length=config.max_length, dropout_p=config.dropout, positional_embedding=not config.no_positional_embedding, rnn_type="lstm")
+        encoder = RNNEncoder([NUM_ACTIONS, NUM_METHODS], [config.embedding_dim, 2], config.feature_dim, num_layers=config.num_layers, max_length=config.max_length, dropout_p=config.dropout, positional_embedding=not config.no_positional_embedding, flipped_embedding=config.flipped_embedding, no_embedding=config.no_embedding, rnn_type="lstm")
     elif config.backbone_type == "gru":
-        encoder = RNNEncoder([NUM_ACTIONS, NUM_METHODS], [config.embedding_dim, 2], config.feature_dim, num_layers=config.num_layers, max_length=config.max_length, dropout_p=config.dropout, positional_embedding=not config.no_positional_embedding, rnn_type="gru")
+        encoder = RNNEncoder([NUM_ACTIONS, NUM_METHODS], [config.embedding_dim, 2], config.feature_dim, num_layers=config.num_layers, max_length=config.max_length, dropout_p=config.dropout, positional_embedding=not config.no_positional_embedding, flipped_embedding=config.flipped_embedding, no_embedding=config.no_embedding, rnn_type="gru")
     else:
         raise ValueError(f"Unknown backbone type: {config.backbone_type}")
     return encoder
@@ -230,7 +230,7 @@ def main(config):
     train_sets, valid_sets = [], []
     for dataset_path in config.dataset_path:
         raw_datasets = UpliftDataset(dataset_path)
-        train_set, valid_set = raw_datasets.split_valid(by='user', val_ratio=config.val_ratio, random_state=config.dataset_seed)
+        train_set, valid_set = raw_datasets.split(by='user', ratio=config.val_ratio, random_state=config.dataset_seed)
         train_sets.append(train_set)
         valid_sets.append(valid_set)
     train_set, valid_set = ConcatDataset(train_sets), ConcatDataset(valid_sets)
@@ -243,8 +243,10 @@ def main(config):
     if config.test_path is not None:
         test_loader = {}
         for test_path in config.test_path:
+            PROPENSITY = 0.5
             testset_name = os.path.basename(test_path)
-            test_set = UpliftDataset(test_path)
+            raw_test_datasets = UpliftDataset(test_path)
+            test_set, _ = raw_test_datasets.split(by='test', ratio=PROPENSITY, random_state=config.dataset_seed)
             test_loader[testset_name] = DataLoader(test_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
                 collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
         print(f"Train size: {len(train_set)}, valid size: {len(valid_set)}, test size:" f"{testset_name} {len(test_loader[testset_name].dataset)}" for testset_name in test_loader.keys())

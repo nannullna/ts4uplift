@@ -206,14 +206,14 @@ class UpliftDataset(Dataset):
         group_to_gamers = self.split_users_by_treatment(self.info)
 
         # First handle users in both groups.
-        gamers_in_both = group_to_gamers[3]
+        gamers_in_both_np = np.asarray(group_to_gamers[3])
 
         np.random.seed(random_state)
-        unif = np.random.rand(len(gamers_in_both))
+        unif = np.random.rand(len(gamers_in_both_np))
         ids = unif.argsort()
-        t1_size = int(propensity_score * len(gamers_in_both))
-        gamers_in_both_t1 = gamers_in_both[ids[:t1_size]]
-        gamers_in_both_t0 = gamers_in_both[ids[t1_size:]]
+        t1_size = int(propensity_score * len(gamers_in_both_np))
+        gamers_in_both_t1 = gamers_in_both_np[ids[:t1_size]].tolist()
+        gamers_in_both_t0 = gamers_in_both_np[ids[t1_size:]].tolist()
 
         test_ids = [i for i, info in self.info.iterrows() if (info['X'].split('_')[0] in gamers_in_both_t1) and (info['T'] == 1)]
         test_ids += [i for i, info in self.info.iterrows() if (info['X'].split('_')[0] in gamers_in_both_t0) and (info['T'] == 0)]

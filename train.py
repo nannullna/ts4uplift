@@ -268,6 +268,7 @@ def main(config):
     print(f"Model has {calc_num_params(model):,} trainable parameters")
     optimizer = create_optimizer(config, model)
 
+    best_epoch, best_metric = 0, 0.0
     for epoch in range(1, config.epochs+1):
 
         all_metrics = {}
@@ -281,7 +282,15 @@ def main(config):
             wandb.log(train_metrics)
         
         if epoch % config.eval_every == 0:
-            valid_metrics = valid(config, swa_model if config.use_swa else model, valid_loader, device, epoch, calc_metrics=calc_metrics, prefix='valid')    
+            valid_metrics = valid(config, swa_model if config.use_swa else model, valid_loader, device, epoch, calc_metrics=calc_metrics, prefix='valid')
+            if valid_metrics['valid/uplift_auc'] > best_metric:
+                best_metric = valid_metrics['valid/uplift_auc']
+                best_epoch = epoch
+                if not config.disable_wandb:
+                    wandb.run.summary["best_metric"] = best_metric
+                    wandb.run.summary["best_epoch"] = best_epoch
+                torch.save(swa_model.module.state_dict() if config.use_swa else model.state_dict(), os.path.join(config.save_dir, "best_model.pt"))
+
             all_metrics.update(valid_metrics)
             if not config.disable_wandb:
                 wandb.log(valid_metrics)

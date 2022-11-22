@@ -63,7 +63,7 @@ class UpliftDataset(Dataset):
     METHOD_TO_IDX = {'LOGIN': 0, 'POST': 1, 'GET': 2, 'PUT': 3, 'DELETE': 4}
     IDX_TO_METHOD = {0: 'LOGIN', 1: 'POST', 2: 'GET', 3: 'PUT', 4: 'DELETE'}
 
-    def __init__(self, root: str, preprocess=None, time_transform=None, feature_transform=None, target_transform=None) -> None:
+    def __init__(self, root: str, preprocess=None, time_transform=None, feature_transform=None, target_transform=None, y_idx: int=0) -> None:
         super().__init__()
         self.root = root
         try:
@@ -76,7 +76,7 @@ class UpliftDataset(Dataset):
         self.feature_transform = feature_transform if feature_transform is not None else self.default_feature_transform
         self.target_transform = target_transform  if target_transform is not None else self.default_target_transform
 
-        self.target_y_idx = 0
+        self.target_y_idx = y_idx
 
     def __len__(self) -> int:
         return len(self.info)

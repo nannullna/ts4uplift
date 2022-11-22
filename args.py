@@ -40,6 +40,8 @@ def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--num_layers", type=int, default=10)
     parser.add_argument("--dropout", type=float, default=0.2)
 
+    parser.add_argument("--pretrained_path", type=str, default=None)
+
     return parser
 
 
@@ -51,5 +53,9 @@ def add_dataset_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     parser.add_argument("--dataset_seed", type=int, default=42)
     parser.add_argument("--max_length", type=int, default=1024)
     parser.add_argument("--val_ratio", type=float, default=0.2)
+
+    # 0: within 3 hours, 1: within 6 hours, 2: within 12 hours
+    parser.add_argument("--train_y_idx", type=int, default=0)
+    parser.add_argument("--test_y_idx", type=int, default=0)
 
     return parser

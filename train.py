@@ -17,6 +17,7 @@ from sklearn.metrics import (
     RocCurveDisplay,
 )
 from sklift.metrics.metrics import uplift_auc_score, qini_auc_score
+from sklift.viz.base import plot_uplift_curve, plot_qini_curve, plot_treatment_balance_curve, plot_uplift_by_percentile
 
 import torch
 import torch.nn as nn
@@ -177,7 +178,10 @@ def calc_metrics(targets: Dict[str, Any], preds: Dict[str, Any]) -> Dict[str, fl
     if "t" in preds:
         metrics["treatment_auc"] = roc_auc_score(targets["t"], preds["t"])
 
-    
+    metrics["qini_plot"] = plot_qini_curve(targets["y"], uplift, targets["t"]).figure_
+    metrics["uplift_plot"] = plot_uplift_curve(targets["y"], uplift, targets["t"]).figure_
+    # metrics["percentile_plot"] = plot_uplift_by_percentile(targets["y"], uplift, targets["t"])
+    # metrics["balance_plot"] = plot_treatment_balance_curve(uplift, targets["t"])
 
     return metrics
 
@@ -307,23 +311,30 @@ def main(config):
                 if not config.disable_wandb:
                     wandb.run.summary["best_metric"] = best_metric
                     wandb.run.summary["best_epoch"] = best_epoch
-                save_model(config, swa_model.module if config.use_swa else model, optimizer, epoch, all_metrics, config.save_dir, is_best=True)
+                save_model(config, swa_model.module if config.use_swa else model, optimizer, epoch, None, config.save_dir, is_best=True)
                 print(f"Best model saved at epoch {epoch}")
 
-            all_metrics.update(valid_metrics)
             if not config.disable_wandb:
-                wandb.log(valid_metrics)
+                _metrics = {k: wandb.Image(v) if not isinstance(v, (float, int)) else v for k, v in valid_metrics.items()}
+                wandb.log(_metrics)
+            # No plot for json serialization
+            all_metrics.update({k: v for k, v in valid_metrics.items() if not k.endswith('plot')})
         
             if test_loader is not None:
                 for testset_name in test_loader:
                     test_metrics = valid(config, swa_model.module if config.use_swa else model, test_loader[testset_name], device, epoch, calc_metrics=calc_metrics, prefix=f'test/{testset_name}')
-                    all_metrics.update(test_metrics)
                     if not config.disable_wandb:
-                        wandb.log(test_metrics)
+                        _metrics = {k: wandb.Image(v) if not isinstance(v, (float, int)) else v for k, v in test_metrics.items()}
+                        wandb.log(_metrics)
+                    # No plot for json serialization
+                    all_metrics.update({k: v for k, v in test_metrics.items() if not k.endswith('plot')})
                 all_metrics.update(test_metrics)
 
         if epoch % config.save_every == 0:
             save_model(config, swa_model.module if config.use_swa else model, optimizer, epoch, all_metrics, config.save_dir)
+
+        # To prevent too many figures    
+        plt.close('all')
 
 
 if __name__ == "__main__":

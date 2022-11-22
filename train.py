@@ -60,6 +60,16 @@ def create_model(config):
         model = Dragonnet(encoder, config.feature_dim, config.dropout)
     else:
         raise ValueError(f"Unknown model type: {config.model_type}")
+
+    if config.pretrained_path is not None:
+        if config.pretrained_path.endswith(".pth") or config.pretrained_path.endswith(".pt"):
+            checkpoint = torch.load(config.pretrained_path)
+            model.load_state_dict(checkpoint["state_dict"])
+        else:
+            config.pretrained_path = os.path.join(config.pretrained_path, "best_model.pth")
+        checkpoint = torch.load(config.pretrained_path, map_location='cpu')
+        model.load_state_dict(checkpoint["state_dict"])
+        print(f"Loaded pretrained model from {config.pretrained_path}")
     return model
 
 
@@ -167,11 +177,16 @@ def calc_metrics(targets: Dict[str, Any], preds: Dict[str, Any]) -> Dict[str, fl
     if "t" in preds:
         metrics["treatment_auc"] = roc_auc_score(targets["t"], preds["t"])
 
+    
+
     return metrics
 
 
-def save_model(config, model: nn.Module, optimizer: optim.Optimizer, epoch: int, metrics: Dict[str, float], save_dir: str):
-    model_path = os.path.join(save_dir, f"model_{epoch}.pth")
+def save_model(config, model: nn.Module, optimizer: optim.Optimizer, epoch: int, metrics: Dict[str, float], save_dir: str, is_best: bool=False):
+    if is_best:
+        model_path = os.path.join(save_dir, f"best_model.pth")
+    else:
+        model_path = os.path.join(save_dir, f"model_{epoch}.pth")
     torch.save({"state_dict": model.state_dict(), "optimizer": optimizer.state_dict(), "epoch": epoch, "metrics": metrics, "config": dict(config)}, model_path)
 
 
@@ -249,7 +264,10 @@ def main(config):
             test_set, _ = raw_test_datasets.split(by='test', ratio=PROPENSITY, random_state=config.dataset_seed)
             test_loader[testset_name] = DataLoader(test_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
                 collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
-        print(f"Train size: {len(train_set)}, valid size: {len(valid_set)}, test size:" f"{testset_name} {len(test_loader[testset_name].dataset)}" for testset_name in test_loader.keys())
+        msg = f"Train size: {len(train_set)}, valid size: {len(valid_set)}, test size:" 
+        for k, v in test_loader.items():
+            msg += f" {k}: {len(v.dataset)}"
+        print(msg)
     else:
         test_set = None
         test_loader = None
@@ -289,7 +307,7 @@ def main(config):
                 if not config.disable_wandb:
                     wandb.run.summary["best_metric"] = best_metric
                     wandb.run.summary["best_epoch"] = best_epoch
-                torch.save(swa_model.module.state_dict() if config.use_swa else model.state_dict(), os.path.join(config.save_dir, "best_model.pt"))
+                save_model(config, swa_model.module if config.use_swa else model, optimizer, epoch, all_metrics, config.save_dir, is_best=True)
                 print(f"Best model saved at epoch {epoch}")
 
             all_metrics.update(valid_metrics)
@@ -298,14 +316,14 @@ def main(config):
         
             if test_loader is not None:
                 for testset_name in test_loader:
-                    test_metrics = valid(config, swa_model if config.use_swa else model, test_loader[testset_name], device, epoch, calc_metrics=calc_metrics, prefix=f'test/{testset_name}')
+                    test_metrics = valid(config, swa_model.module if config.use_swa else model, test_loader[testset_name], device, epoch, calc_metrics=calc_metrics, prefix=f'test/{testset_name}')
                     all_metrics.update(test_metrics)
                     if not config.disable_wandb:
                         wandb.log(test_metrics)
                 all_metrics.update(test_metrics)
 
         if epoch % config.save_every == 0:
-            save_model(config, swa_model if config.use_swa else model, optimizer, epoch, all_metrics, config.save_dir)
+            save_model(config, swa_model.module if config.use_swa else model, optimizer, epoch, all_metrics, config.save_dir)
 
 
 if __name__ == "__main__":

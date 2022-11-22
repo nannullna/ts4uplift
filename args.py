@@ -40,6 +40,8 @@ def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--num_layers", type=int, default=10)
     parser.add_argument("--dropout", type=float, default=0.2)
 
+    parser.add_argument("--pretrained_path", type=str, default=None)
+
     return parser
 
 

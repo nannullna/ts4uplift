@@ -255,7 +255,7 @@ def main(config):
     train_set, valid_set = ConcatDataset(train_sets), ConcatDataset(valid_sets)
 
     train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, drop_last=True,
-        collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
+        collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=config.backbone_type != 'tcn'), num_workers=4, pin_memory=True)
     valid_loader = DataLoader(valid_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
         collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
     
@@ -267,7 +267,7 @@ def main(config):
             raw_test_datasets = UpliftDataset(test_path, y_idx=config.test_y_idx)
             test_set, _ = raw_test_datasets.split(by='test', ratio=PROPENSITY, random_state=config.dataset_seed)
             test_loader[testset_name] = DataLoader(test_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
-                collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
+                collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=config.backbone_type != 'tcn'), num_workers=4, pin_memory=True)
         msg = f"Train size: {len(train_set)}, valid size: {len(valid_set)}, test size:" 
         for k, v in test_loader.items():
             msg += f" {k}: {len(v.dataset)}"

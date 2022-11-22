@@ -248,7 +248,7 @@ def main(config):
     # Load multiple datasets
     train_sets, valid_sets = [], []
     for dataset_path in config.dataset_path:
-        raw_datasets = UpliftDataset(dataset_path)
+        raw_datasets = UpliftDataset(dataset_path, y_idx=config.train_y_idx)
         train_set, valid_set = raw_datasets.split(by='user', ratio=config.val_ratio, random_state=config.dataset_seed)
         train_sets.append(train_set)
         valid_sets.append(valid_set)
@@ -264,7 +264,7 @@ def main(config):
         for test_path in config.test_path:
             PROPENSITY = 0.5
             testset_name = os.path.basename(test_path)
-            raw_test_datasets = UpliftDataset(test_path)
+            raw_test_datasets = UpliftDataset(test_path, y_idx=config.test_y_idx)
             test_set, _ = raw_test_datasets.split(by='test', ratio=PROPENSITY, random_state=config.dataset_seed)
             test_loader[testset_name] = DataLoader(test_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
                 collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)

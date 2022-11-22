@@ -87,6 +87,7 @@ class RNNEncoder(Encoder):
         input_dim = 6  if self.no_embedding else self.embedding.total_dim + 6 # for timestamp embedding
         self.encoder = nn.LSTM(input_dim, feature_dim, num_layers, batch_first=True, dropout=dropout_p) if rnn_type == 'lstm' else \
                     nn.GRU(input_dim, feature_dim, num_layers, batch_first=True, dropout=dropout_p)
+        self.encoder.flatten_parameters()
         self.pool = self.create_pooler(pool)
 
     def forward(self, inputs):
@@ -97,4 +98,4 @@ class RNNEncoder(Encoder):
             z, _ = self.encoder(ftrs)
         else:
             z, _ = self.encoder(timestamp)
-        return self.pool(z)
+        return self.pool(z).contiguous()

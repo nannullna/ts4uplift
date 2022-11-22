@@ -3,6 +3,7 @@ import os
 import argparse
 from dataclasses import dataclass
 from datetime import datetime
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
@@ -114,6 +115,47 @@ def train(config, model: nn.Module, train_loader: DataLoader, device: torch.devi
 
     print(f"Train Epoch: {epoch} \tLoss: {train_loss:.6f}")
     metrics = {"train/loss": train_loss, "train/mse_loss": mse_losses, "train/bce_loss": bce_loss, "epoch": epoch}
+    return metrics
+
+
+def train_ewc(config, model: nn.Module, prev_model: nn.Module, train_loader: DataLoader, device: torch.device, optimizer: optim.Optimizer, epoch: int) -> Dict[str, float]:
+    model.train()
+    train_loss = 0.0
+    mse_losses = 0.0
+    bce_losses = 0.0
+    ewc_losses = 0.0
+    for batch_idx, batch in enumerate(tqdm(train_loader, ncols=80, desc=f'Epoch: {epoch} train', leave=False)):
+        optimizer.zero_grad()
+        # Forward
+        batch = {k: v.to(device) for k, v in batch.items()}
+        output = model(batch)
+        # Loss
+        if config.model_type == "siamese":
+            loss, (mse_loss, bce_loss) = direct_uplift_loss(output, batch, alpha=config.alpha, e_x=0.5, return_all=True)
+        elif config.model_type == "dragonnet":
+            loss, (mse_loss, bce_loss) = dragonnet_loss(output, batch, alpha=config.alpha, return_all=True)
+
+        if config.ewc_lambda > 0.0:
+            prev_model.to(device)
+            ewc_loss = torch.tensor(0., device=device)
+            for param, prev_param in zip(model.parameters(), prev_model.parameters()):
+                ewc_loss += torch.norm(param - prev_param)
+            loss += config.ewc_lambda * ewc_loss
+            ewc_losses += ewc_loss.item()
+
+        loss.backward()
+        optimizer.step()
+        train_loss += loss.item()
+        mse_losses += mse_loss.item()
+        bce_losses += bce_loss.item()
+            
+    train_loss /= len(train_loader)
+    mse_losses /= len(train_loader)
+    bce_losses /= len(train_loader)
+    ewc_losses /= len(train_loader)
+
+    print(f"Train Epoch: {epoch} \tLoss: {train_loss:.6f}")
+    metrics = {"train/loss": train_loss, "train/mse_loss": mse_losses, "train/bce_loss": bce_loss, "train/ewc_loss": ewc_losses, "epoch": epoch}
     return metrics
 
 
@@ -279,6 +321,11 @@ def main(config):
 
     # Load model and optimizer
     model = create_model(config)
+    if config.ewc_lambda > 0.0:
+        prev_model = deepcopy(model)
+        prev_model.to(device)
+    else:
+        prev_model = None
     model.to(device)
     if not config.disable_wandb:
         wandb.watch(model, log="all", log_freq=100)
@@ -295,7 +342,10 @@ def main(config):
 
         all_metrics = {}
 
-        train_metrics = train(config, model, train_loader, device, optimizer, epoch)
+        if config.ewc_lambda > 0.0:
+            train_metrics = train_ewc(config, model, prev_model, train_loader, device, optimizer, epoch)
+        else:
+            train_metrics = train(config, model, train_loader, device, optimizer, epoch)
         if config.use_swa:
             swa_model.update_parameters(model)
 

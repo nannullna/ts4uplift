@@ -19,7 +19,8 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
     parser.add_argument("--save_every", type=int, default=10)
     parser.add_argument("--eval_every", type=int, default=1)
 
-    parser.add_argument("--alpha", type=float, default=0.2)
+    parser.add_argument("--alpha", type=float, default=0.2, help="alpha for loss function")
+    parser.add_argument("--ewc_lambda", type=float, default=0.0, help="lambda for EWC")
 
     parser.add_argument("--use_swa", action='store_true')
 

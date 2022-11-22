@@ -65,11 +65,10 @@ def create_model(config):
 
     if config.pretrained_path is not None:
         if config.pretrained_path.endswith(".pth") or config.pretrained_path.endswith(".pt"):
-            checkpoint = torch.load(config.pretrained_path)
-            model.load_state_dict(checkpoint["state_dict"])
+            pretrained_path = config.pretrained_path
         else:
-            config.pretrained_path = os.path.join(config.pretrained_path, "best_model.pth")
-        checkpoint = torch.load(config.pretrained_path, map_location='cpu')
+            pretrained_path = os.path.join(config.pretrained_path, "best_model.pth")
+        checkpoint = torch.load(pretrained_path, map_location='cpu')
         model.load_state_dict(checkpoint["state_dict"])
         print(f"Loaded pretrained model from {config.pretrained_path}")
     return model
@@ -399,6 +398,7 @@ if __name__ == "__main__":
     model_name += f"_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     if args.save_dir is not None:
         args.save_dir = os.path.join(args.save_dir, model_name)
+        print(f"Save experiment to {args.save_dir}")
         os.makedirs(args.save_dir, exist_ok=True)
 
     if not args.disable_wandb:

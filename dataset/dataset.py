@@ -78,8 +78,8 @@ class UpliftDataset(Dataset):
 
         self.target_y_idx = y_idx
 
-    def __len__(self) -> int:
-        return len(self.info)
+    def __len__(self, select_indices: list=None) -> int:
+        return len(self.info if select_indices is None else self.info.iloc[select_indices])
 
 
     def load_data(self, index: int):
@@ -127,22 +127,22 @@ class UpliftDataset(Dataset):
         return torch.tensor(T, dtype=torch.float), torch.tensor(Y[self.target_y_idx], dtype=torch.float) # (1,), (1,)
 
 
-    def split(self, by: str='random', ratio: float=0.2, random_state: int=42, **kwargs) -> Tuple[Subset, Subset]:
+    def split(self, by: str='random', ratio: float=0.2, random_state: int=42, select_indices: list=None, **kwargs) -> Tuple[Subset, Subset]:
         """Splits the dataset into train and validation by user."""
         if by == 'random':
-            train_ids, valid_ids = self.val_by_random(ratio, random_state, **kwargs)
+            train_ids, valid_ids = self.val_by_random(ratio, random_state, select_indices, **kwargs)
         elif by == 'user':
-            train_ids, valid_ids = self.val_by_user(ratio, random_state, **kwargs)
+            train_ids, valid_ids = self.val_by_user(ratio, random_state, select_indices, **kwargs)
         elif by == 'match':
-            train_ids, valid_ids = self.val_by_match(ratio, random_state, **kwargs)
+            train_ids, valid_ids = self.val_by_match(ratio, random_state, select_indices, **kwargs)
         elif by == 'test':
-            train_ids, valid_ids = self.test_split(ratio, random_state, **kwargs)
+            train_ids, valid_ids = self.test_split(ratio, random_state, select_indices, **kwargs)
         else:
             raise ValueError(f'Invalid split method: {by}')
         return Subset(self, train_ids), Subset(self, valid_ids)
 
 
-    def val_by_random(self, val_ratio: float, random_state: int=42, **kwargs) -> Tuple[List[int], List[int]]:
+    def val_by_random(self, val_ratio: float, random_state: int=42, select_indices: list=None, **kwargs) -> Tuple[List[int], List[int]]:
         """Splits the dataset into train and validation in random fashion and returns indices. Do not consider overlap in users."""
         np.random.seed(random_state)
         unif = np.random.rand(self.__len__())
@@ -176,10 +176,10 @@ class UpliftDataset(Dataset):
         return group_to_gamers
 
 
-    def val_by_user(self, val_ratio: float, random_state: int=42, **kwargs) -> Tuple[List[int], List[int]]:
+    def val_by_user(self, val_ratio: float, random_state: int=42, select_indices: list=None, **kwargs) -> Tuple[List[int], List[int]]:
         """Splits the dataset into train and validation by unique user in random fashion and returns indices.
         """
-        group_to_gamers = self.split_users_by_treatment(self.info)
+        group_to_gamers = self.split_users_by_treatment(self.info if select_indices is None else self.info.iloc[select_indices])
         
         np.random.seed(random_state)
         train_gamers, val_gamers = [], []
@@ -201,10 +201,10 @@ class UpliftDataset(Dataset):
         return (train_ids, val_ids)
 
     
-    def test_split(self, propensity_score: float=0.5, random_state: int=42, **kwargs) -> Tuple[List[int], List[int]]:
+    def test_split(self, propensity_score: float=0.5, random_state: int=42, select_indices: list=None, **kwargs) -> Tuple[List[int], List[int]]:
         """Splits users in both T=1 and T=0 groups in random fashion for no overlap in users. No validation set."""
-        group_to_gamers = self.split_users_by_treatment(self.info)
-
+        group_to_gamers = self.split_users_by_treatment(self.info if select_indices is None else self.info.iloc[select_indices])
+        
         # First handle users in both groups.
         gamers_in_both_np = np.asarray(group_to_gamers[3])
 
@@ -228,7 +228,7 @@ class UpliftDataset(Dataset):
         return (test_ids, [])
     
 
-    def val_by_match(self, val_ratio: float, random_state: int=42, **kwargs) -> Tuple[List[int], List[int]]:
+    def val_by_match(self, val_ratio: float, random_state: int=42, select_indices: list=None, **kwargs) -> Tuple[List[int], List[int]]:
         """Splits the dataset into train and validation by user in match fashion and returns indices."""
         raise NotImplementedError
 

@@ -22,6 +22,8 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
     parser.add_argument("--alpha", type=float, default=0.2, help="alpha for loss function")
     parser.add_argument("--ewc_lambda", type=float, default=0.0, help="lambda for EWC")
 
+    parser.add_argument("--cl_scenario", action='store_true')
+    parser.add_argument("--use_bestval", action='store_true')
     parser.add_argument("--use_swa", action='store_true')
 
     return parser
@@ -58,5 +60,8 @@ def add_dataset_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     # 0: within 3 hours, 1: within 6 hours, 2: within 12 hours
     parser.add_argument("--train_y_idx", type=int, default=0)
     parser.add_argument("--test_y_idx", type=int, default=0)
+
+    parser.add_argument("--cl_test_ratio", type=float, default=0.2)
+    parser.add_argument("--cl_val_ratio", type=float, default=0.1)
 
     return parser

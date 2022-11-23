@@ -4,6 +4,7 @@ import argparse
 from dataclasses import dataclass
 from datetime import datetime
 from copy import deepcopy
+from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
@@ -227,11 +228,11 @@ def calc_metrics(targets: Dict[str, Any], preds: Dict[str, Any]) -> Dict[str, fl
     return metrics
 
 
-def save_model(config, model: nn.Module, optimizer: optim.Optimizer, epoch: int, metrics: Dict[str, float], save_dir: str, is_best: bool=False):
+def save_model(config, model: nn.Module, optimizer: optim.Optimizer, epoch: int, metrics: Dict[str, float], save_dir: str, is_best: bool=False, task_name: str=None):
     if is_best:
-        model_path = os.path.join(save_dir, f"best_model.pth")
+        model_path = os.path.join(save_dir, "best_model.pth" if task_name is None else f"best_model_{task_name}.pth")
     else:
-        model_path = os.path.join(save_dir, f"model_{epoch}.pth")
+        model_path = os.path.join(save_dir, f"model_{epoch}.pth" if task_name is None else f"model_{task_name}_{epoch}.pth")
     torch.save({"state_dict": model.state_dict(), "optimizer": optimizer.state_dict(), "epoch": epoch, "metrics": metrics, "config": dict(config)}, model_path)
 
 
@@ -386,6 +387,112 @@ def main(config):
         plt.close('all')
 
 
+def cl_main(config):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
+
+    # Set seed
+    if config.seed is not None:
+        set_seed(config.seed)
+    
+    # Load multiple datasets
+    train_loader, valid_loader = OrderedDict(), OrderedDict()
+    test_loader = OrderedDict()
+    for dataset_path in config.dataset_path:
+        task_name = os.path.basename(dataset_path)
+        raw_datasets = UpliftDataset(dataset_path, y_idx=config.train_y_idx)
+        train_set, testval_set = raw_datasets.split(by='user', ratio=config.cl_test_ratio, random_state=config.dataset_seed)
+        # train_set, valid_set = raw_datasets.split(by='user', ratio=config.cl_val_ratio, random_state=config.dataset_seed, select_indices=trainval_set.indices)
+
+        train_loader[task_name] = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, drop_last=True,
+            collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=config.backbone_type != 'tcn'), num_workers=4, pin_memory=True)
+        valid_loader[task_name] = DataLoader(testval_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
+            collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True) 
+        test_loader[task_name] = DataLoader(testval_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
+                collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=config.backbone_type != 'tcn'), num_workers=4, pin_memory=True)
+
+    for k in train_loader.keys():
+        msg = f"{k}: Train size: {len(train_loader[k].dataset)}, valid size: {len(valid_loader[k].dataset)}, test size: {len(test_loader[k].dataset)}"
+        print(msg)
+    
+    # Load model and optimizer
+    model = create_model(config)
+    if config.ewc_lambda > 0.0:
+        prev_model = deepcopy(model)
+        prev_model.to(device)
+    else:
+        prev_model = None
+    model.to(device)
+    if not config.disable_wandb:
+        wandb.watch(model, log="all", log_freq=100)
+    if config.use_swa:
+        swa_model = AveragedModel(model)
+    else:
+        swa_model = None
+
+    print(f"Model has {calc_num_params(model):,} trainable parameters")
+    optimizer = create_optimizer(config, model)
+
+
+    for task_i, task_name in enumerate(train_loader.keys()):
+        print(f"Training on task {task_name}")
+        best_epoch, best_metric = 0, 0.0
+        for epoch in range(task_i*config.epochs+1, (task_i+1)*config.epochs+1):
+
+            all_metrics = {}
+
+            if config.ewc_lambda > 0.0:
+                train_metrics = train_ewc(config, model, prev_model, train_loader[task_name], device, optimizer, epoch)
+            else:
+                train_metrics = train(config, model, train_loader[task_name], device, optimizer, epoch)
+            if config.use_swa:
+                swa_model.update_parameters(model)
+
+            all_metrics.update(train_metrics)
+            if not config.disable_wandb:
+                wandb.log(train_metrics)
+            
+            if epoch % config.eval_every == 0:
+                valid_metrics = valid(config, swa_model if config.use_swa else model, valid_loader[task_name], device, epoch, calc_metrics=calc_metrics, prefix='valid')
+                if valid_metrics['valid/uplift_auc'] > best_metric:
+                    best_metric = valid_metrics['valid/uplift_auc']
+                    best_epoch = epoch
+                    if not config.disable_wandb:
+                        wandb.run.summary["best_metric"] = best_metric
+                        wandb.run.summary["best_epoch"] = best_epoch
+                    save_model(config, swa_model.module if config.use_swa else model, optimizer, epoch, None, config.save_dir, is_best=True, task_name=task_name)
+                    print(f"Best model saved at epoch {epoch}")
+
+                if not config.disable_wandb:
+                    _metrics = {k: wandb.Image(v) if not isinstance(v, (float, int)) else v for k, v in valid_metrics.items()}
+                    wandb.log(_metrics)
+                # No plot for json serialization
+                all_metrics.update({k: v for k, v in valid_metrics.items() if not k.endswith('plot')})
+            
+                
+                for task_name in test_loader:
+                    test_metrics = valid(config, swa_model.module if config.use_swa else model, test_loader[task_name], device, epoch, calc_metrics=calc_metrics, prefix=f'test/{task_name}')
+                    if not config.disable_wandb:
+                        _metrics = {k: wandb.Image(v) if not isinstance(v, (float, int)) else v for k, v in test_metrics.items()}
+                        wandb.log(_metrics)
+                    # No plot for json serialization
+                    all_metrics.update({k: v for k, v in test_metrics.items() if not k.endswith('plot')})
+                all_metrics.update(test_metrics)
+
+            if epoch % config.save_every == 0:
+                save_model(config, swa_model.module if config.use_swa else model, optimizer, epoch, all_metrics, config.save_dir, task_name=task_name)
+
+            # To prevent too many figures    
+            plt.close('all')
+
+        if config.use_bestval:
+            print(f"Loading best model at epoch {best_epoch} from task {task_name}")
+            checkpoint = torch.load(os.path.join(config.save_dir, f"best_model_{task_name}.pth"))
+            if config.use_swa:
+                swa_model.module.load_state_dict(checkpoint['state_dict'])
+            else:
+                model.load_state_dict(checkpoint['state_dict'])
+         
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Uplift Modeling")
     parser = add_dataset_args(parser)
@@ -407,7 +514,10 @@ if __name__ == "__main__":
     else:
         config = args
     
-    main(config)
+    if config.cl_scenario:
+        cl_main(config)
+    else:
+        main(config)
 
 
 

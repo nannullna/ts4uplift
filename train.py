@@ -298,7 +298,7 @@ def main(config):
     train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, drop_last=True,
         collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=config.backbone_type != 'tcn'), num_workers=4, pin_memory=True)
     valid_loader = DataLoader(valid_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
-        collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
+        collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=config.backbone_type != 'tcn'), num_workers=4, pin_memory=True)
     
     if config.test_path is not None:
         test_loader = {}

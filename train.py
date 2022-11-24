@@ -299,7 +299,7 @@ def main(config):
     train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, drop_last=True,
         collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=config.backbone_type != 'tcn'), num_workers=4, pin_memory=True)
     valid_loader = DataLoader(valid_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
-        collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True)
+        collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=config.backbone_type != 'tcn'), num_workers=4, pin_memory=True)
     
     if config.test_path is not None:
         test_loader = {}
@@ -406,9 +406,9 @@ def cl_main(config):
         train_loader[task_name] = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, drop_last=True,
             collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=config.backbone_type != 'tcn'), num_workers=4, pin_memory=True)
         valid_loader[task_name] = DataLoader(testval_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
-            collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=False), num_workers=4, pin_memory=True) 
+            collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=config.backbone_type != 'tcn'), num_workers=4, pin_memory=True) 
         test_loader[task_name] = DataLoader(testval_set, batch_size=config.batch_size, shuffle=False, drop_last=False,
-                collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=config.backbone_type != 'tcn'), num_workers=4, pin_memory=True)
+            collate_fn=lambda data: collate_fn(data, config.max_length, pad_on_right=config.backbone_type != 'tcn'), num_workers=4, pin_memory=True)
 
     for k in train_loader.keys():
         msg = f"{k}: Train size: {len(train_loader[k].dataset)}, valid size: {len(valid_loader[k].dataset)}, test size: {len(test_loader[k].dataset)}"
@@ -416,11 +416,11 @@ def cl_main(config):
     
     # Load model and optimizer
     model = create_model(config)
-    if config.ewc_lambda > 0.0:
-        prev_model = deepcopy(model)
-        prev_model.to(device)
-    else:
-        prev_model = None
+    # if config.ewc_lambda > 0.0:
+    #     prev_model = deepcopy(model)
+    #     prev_model.to(device)
+    # else:
+    prev_model = None
     model.to(device)
     if not config.disable_wandb:
         wandb.watch(model, log="all", log_freq=100)
@@ -440,7 +440,7 @@ def cl_main(config):
 
             all_metrics = {}
 
-            if config.ewc_lambda > 0.0:
+            if config.ewc_lambda > 0.0 and task_i > 0:
                 train_metrics = train_ewc(config, model, prev_model, train_loader[task_name], device, optimizer, epoch)
             else:
                 train_metrics = train(config, model, train_loader[task_name], device, optimizer, epoch)
@@ -491,6 +491,14 @@ def cl_main(config):
                 swa_model.module.load_state_dict(checkpoint['state_dict'])
             else:
                 model.load_state_dict(checkpoint['state_dict'])
+        
+        if config.ewc_lambda > 0.0:
+            if config.use_swa:
+                prev_model = deepcopy(swa_model)
+                prev_model.to(device)
+            else:
+                prev_model = deepcopy(model)
+                prev_model.to(device)
          
     
 if __name__ == "__main__":

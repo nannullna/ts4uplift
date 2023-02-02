@@ -4,7 +4,7 @@ Official repository of the paper: **Modeling Uplift from Observational Time-Seri
 
 [https://openreview.net/forum?id=pKyB5wMnTiy](https://openreview.net/forum?id=pKyB5wMnTiy)
 
-데이터셋 다운로드는 [https://drive.google.com/file/d/16j88C2sndyWRijGrb4lAnJHXTnixifDF/view?usp=share_link](https://drive.google.com/file/d/16j88C2sndyWRijGrb4lAnJHXTnixifDF/view?usp=share_link)에서 가능합니다.
+데이터셋 다운로드는 [https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing](https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing)에서 가능합니다.
 
 영어 버전은 [여기](README.md)에서 확인할 수 있습니다.
 

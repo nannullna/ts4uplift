@@ -8,6 +8,8 @@ Official repository of the paper: **Modeling Uplift from Observational Time-Seri
 
 영어 버전은 [여기](README.md)에서 확인할 수 있습니다.
 
+발표 포스터는 [여기](poster_final.pdf)에서 확인할 수 있습니다.
+
 
 ## 초록
 

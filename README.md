@@ -8,6 +8,8 @@ The dataset can be downloaded at [https://drive.google.com/file/d/16j88C2sndyWRi
 
 For Korean version, please refer to [README_KOR.md](README_KOR.md).
 
+The poster can be found at [poster_final.pdf](poster_final.pdf).
+
 ## 초록 - Abstract
 
 As the importance of causality in machine learning grows, we expect the model to learn the correct causal mechanism for robustness even under distribution shifts. Since most of the prior benchmarks focused on vision and language tasks, domain or temporal shifts in causal inference tasks have not been well explored. To this end, we introduce Backend-TS dataset for modeling uplift in continual learning scenarios. We build the dataset with CRUD data and propose continual learning tasks under temporal and domain shifts.

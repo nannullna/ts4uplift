@@ -56,7 +56,7 @@ Official repository of the paper: **Modeling Uplift from Observational Time-Seri
 
 베이스라인 모델의 구성은 다음과 같습니다. 백본으로는 Temporal Convolution Network(TCN)[1]이 시계열 정보를 압축하기 위해서 사용되었습니다. RNN 계열 모델이 아닌 TCN이 사용된 이유는 vanilla RNN, LSTM, GRU 모두 긴 시퀀스의 학습이 매우 불안정했기 때문인데, 그 원인으로는 기울기 소실 문제가 꼽힙니다. TCN은 dilated convolution[2] 블록을 11개 쌓아 receptive field가 2,048이 되도록 하였고, 인풋 역시도 마지막 2,048개의 로그만을 사용했습니다. 물론 더 긴 길이의 시퀀스를 이용하기 위해 hierarhical modeling 등 다른 모델링 기법이나 binning과 같은 다른 전처리 기법들을 사용해볼 수 있으나, 본 연구에서는 베이스라인을 제공하는 것이 목적이었으므로 이러한 방법은 사용하지 않았습니다. TCN 레이어를 이용하여 hidden representation인 $z = f(X)$를 얻습니다.
 
-업리프트 모델로는 Dragonnet[3]과 Simanese Nework[4]이 베이스라인으로 사용되었습니다. 공통적으로 TCN 백본의 가장 마지막 레이어의 출력을 입력으로 받아 사용합니다. Dragonnet은 주어진 데이터에서 $\hat y = g(z, t)$를 예측함과 동시에 경향 점수(propensity score)라고 불리는 $\hat t = h(z)$를 예측하게 하는 방식으로 정규화(regularization)을 수행합니다. 이때, 신경망 $g(\cdot)$과 $h(\cdot)$은 초반 가중치를 상당히 공유하는 형태로, 경향 점수 예측에 필요한 특성(feature)만이 인과관계 효과 추론에 필수적이라는 사실을 기반으로 합니다. Simanese Network은 Athey와 Imbens[5]가 제안한 Z 변수 변환이 실제 uplift 값과 같다는 사실을 바탕으로, 이를 회귀 문제(regression problem)으로 풀게 됩니다. 
+업리프트 모델로는 Dragonnet[3]과 Simanese Nework[4]이 베이스라인으로 사용되었습니다. 공통적으로 TCN 백본의 가장 마지막 레이어의 출력을 입력으로 받아 사용합니다. Dragonnet은 주어진 데이터에서 $\hat y = g(z, t)$를 예측함과 동시에 경향 점수(propensity score)라고 불리는 $\hat t = h(z)$를 예측하게 하는 방식으로 정규화(regularization)을 수행합니다. 이때, 신경망 $g(\cdot)$과 $h(\cdot)$은 초반 가중치를 상당히 공유하는 형태로, 경향 점수 예측에 필요한 특성(feature)만이 인과관계 효과 추론에 필수적이라는 사실을 기반으로 합니다. Simanese Network은 Athey와 Imbens[5]가 제안한 Z 변수 변환의 기댓값이 실제 uplift 값과 같다는 사실을 바탕으로, 이를 회귀 문제(regression problem)으로 풀게 됩니다. 
 
 
 ## 사용 방법 - Usage

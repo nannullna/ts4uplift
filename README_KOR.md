@@ -4,6 +4,8 @@ Official repository of the paper: **Modeling Uplift from Observational Time-Seri
 
 [https://openreview.net/forum?id=pKyB5wMnTiy](https://openreview.net/forum?id=pKyB5wMnTiy)
 
+영어 버전은 [여기](README.md)에서 확인할 수 있습니다.
+
 
 ## 초록
 

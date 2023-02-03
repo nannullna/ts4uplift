@@ -4,7 +4,7 @@ Official repository of the paper: **Modeling Uplift from Observational Time-Seri
 
 [https://openreview.net/forum?id=pKyB5wMnTiy](https://openreview.net/forum?id=pKyB5wMnTiy)
 
-The dataset can be downloaded at [https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing](https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing).
+The official link to the dataset homepage is temporarily changed due to an internal issue as [https://www.thebackend.io/research-backend-ts](https://www.thebackend.io/research-backend-ts). Still, the dataset can be downloaded at [https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing](https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing).
 
 For Korean version, please refer to [README_KOR.md](README_KOR.md).
 

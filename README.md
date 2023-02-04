@@ -149,8 +149,6 @@ As a result, `collate_fn` returns a dictionary of the form `{str: torch.Tensor}`
 You may train the model using the following script. You can check the available arguments using `--help`. All arguments are defined in `args.py`.
 
 ```bash
-
-```bash
 python train.py --help
 ```
 

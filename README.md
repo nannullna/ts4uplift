@@ -4,7 +4,7 @@ Official repository of the paper: **Modeling Uplift from Observational Time-Seri
 
 [https://openreview.net/forum?id=pKyB5wMnTiy](https://openreview.net/forum?id=pKyB5wMnTiy)
 
-The official link to the dataset homepage is temporarily changed due to an internal issue as [https://www.thebackend.io/research-backend-ts](https://www.thebackend.io/research-backend-ts). Still, the dataset can be downloaded at [https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing](https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing).
+The dataset can be downloaded at [https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing](https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing). ([Official Blog Link](https://blog.thebackend.io/research-backnd-ts/))
 
 For Korean version, please refer to [README_KOR.md](README_KOR.md).
 
@@ -17,7 +17,7 @@ As the importance of causality in machine learning grows, we expect the model to
 
 ## 소개 - Introduction
 
-The **Backend-TS** dataset has been developed in collaboration with [Graduate School of AI, KAIST](https://gsai.kaist.ac.kr/) and [AFI Inc.](https://www.afidev.com/), a leading Backend-as-a-Service (BaaS) company specializing in mobile games, to aid research in log-level time-series and causal inference. The dataset has been named after the service provided by AFI Inc., [Backend](https://www.thebackend.io/), which refers to the time-series of backend server logs. As of January 2023, this service has been utilized by 3,174 mobile games, generating a cumulative user base of over 60 million, and 115 million daily transactions. By identifying valuable patterns in this log-level data, we aim to predict user behavior in order to improve the operations of game services.
+The **Backend-TS** dataset has been developed in collaboration with [Graduate School of AI, KAIST](https://gsai.kaist.ac.kr/) and [AFI Inc.](https://www.afidev.com/), a leading Backend-as-a-Service (BaaS) company specializing in mobile games, to aid research in log-level time-series and causal inference. The dataset has been named after the service provided by AFI Inc., [Backnd](https://www.backnd.com/), which refers to the time-series of backend server logs. As of January 2023, this service has been utilized by 3,174 mobile games, generating a cumulative user base of over 60 million, and 115 million daily transactions. By identifying valuable patterns in this log-level data, we aim to predict user behavior in order to improve the operations of game services.
 
 The log information of most internet services is generated on a massive scale on a daily basis, however, its utility is not commensurate with its scale. As such, this log data is commonly stored in data warehouses, with only a small proportion utilized for data science and analysis. The analysis is carried out from macro-level perspectives, such as service and company level, while individual user interests or predictions receive relatively less importance. However, the task of interest in this dataset is to predict individual user behavior, ultimately contributing to improved user satisfaction and service quality. Additionally, from the perspective of machine learning and data mining, the dataset has been created with minimal pre-processing in order to reduce dependence on manual feature engineering and selection, and to incorporate more information.
 

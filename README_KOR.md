@@ -4,7 +4,7 @@ Official repository of the paper: **Modeling Uplift from Observational Time-Seri
 
 [https://openreview.net/forum?id=pKyB5wMnTiy](https://openreview.net/forum?id=pKyB5wMnTiy)
 
-서버 내부적인 오류로 인해서 임시로 데이터셋 홈페이지가 다음의 주소로 변경되었습니다. [https://www.thebackend.io/research-backend-ts-KR](https://www.thebackend.io/research-backend-ts-KR). 데이터셋 다운로드는 [https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing](https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing)에서 가능합니다.
+데이터셋 다운로드는 [https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing](https://drive.google.com/drive/folders/12NBfJk3pRqEDsjDXglt12BpAVIK_Fzp9?usp=sharing)에서 가능합니다. ([공식 블로그](https://blog.thebackend.io/research-backnd-ts-kr/))
 
 영어 버전은 [여기](README.md)에서 확인할 수 있습니다.
 
